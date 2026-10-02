@@ -1,0 +1,6 @@
+{
+  "name": "Personal News Intelligence & Event Portal",
+  "description": "Private personal news intelligence, multi-source crawling, event extraction and deduplication portal with Excel-based AI workflows.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

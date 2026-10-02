@@ -1,0 +1,348 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-main: #f8fafc;
+    --bg-card: #ffffff;
+    --bg-hover: #f1f5f9;
+    --border: #d8dee6;
+
+    --text-primary: #111827;
+    --text-secondary: #6b7280;
+
+    --accent: #1f2937;
+    --accent-hover: #111827;
+    --accent-light: #e5e7eb;
+
+    --accent-text: #1f2937;
+    --accent-border: #9ca3af;
+  }
+
+  html {
+    background-color: var(--bg-main);
+  }
+
+  body {
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+    font-family:
+      -apple-system,
+      BlinkMacSystemFont,
+      "Segoe UI",
+      Roboto,
+      "Helvetica Neue",
+      Arial,
+      sans-serif;
+  }
+
+  ::selection {
+    background-color: var(--accent-light);
+    color: var(--text-primary);
+  }
+
+  a {
+    color: var(--accent-text);
+  }
+
+  a:hover {
+    color: var(--accent-hover);
+  }
+}
+
+
+/* =========================================================
+   THEME: BLACK (Midnight Slate)
+   Clean White + Charcoal / Slate
+   ========================================================= */
+
+:root[data-theme="BLACK"],
+:root[data-theme="black"],
+html[data-theme="BLACK"],
+html[data-theme="black"],
+[data-theme="BLACK"],
+[data-theme="black"],
+.theme-black,
+.theme-BLACK {
+  --bg-main: #f8fafc;
+  --bg-card: #ffffff;
+  --bg-hover: #f1f5f9;
+
+  --border: #d8dee6;
+
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+
+  --accent: #1f2937;
+  --accent-hover: #111827;
+  --accent-light: #e5e7eb;
+
+  --accent-text: #1f2937;
+  --accent-border: #9ca3af;
+}
+
+
+/* =========================================================
+   THEME: PINK (Rose Wine)
+   Clean Rose Tint + Vibrant Rose / Wine Accents
+   ========================================================= */
+
+:root[data-theme="PINK"],
+:root[data-theme="pink"],
+html[data-theme="PINK"],
+html[data-theme="pink"],
+[data-theme="PINK"],
+[data-theme="pink"],
+.theme-pink,
+.theme-PINK {
+  --bg-main: #fff5f7;
+  --bg-card: #ffffff;
+  --bg-hover: #ffe4e9;
+
+  --border: #fbcfe8;
+
+  --text-primary: #3b0720;
+  --text-secondary: #831843;
+
+  --accent: #db2777;
+  --accent-hover: #be185d;
+  --accent-light: #fce7f3;
+
+  --accent-text: #be185d;
+  --accent-border: #f472b6;
+}
+
+
+/* =========================================================
+   THEME: BLUE (Intelligence Navy)
+   Clean Ice Blue + Deep Sapphire / Azure Accents
+   ========================================================= */
+
+:root[data-theme="BLUE"],
+:root[data-theme="blue"],
+html[data-theme="BLUE"],
+html[data-theme="blue"],
+[data-theme="BLUE"],
+[data-theme="blue"],
+.theme-blue,
+.theme-BLUE {
+  --bg-main: #f8fbff;
+  --bg-card: #ffffff;
+  --bg-hover: #eff6ff;
+
+  --border: #dbeafe;
+
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-light: #dbeafe;
+
+  --accent-text: #1d4ed8;
+  --accent-border: #93c5fd;
+}
+
+
+/* =========================================================
+   THEME: RAINBOW (Chromatic / Violet)
+   Subtle Iris Tint + Electric Violet / Purple Accents
+   ========================================================= */
+
+:root[data-theme="RAINBOW"],
+:root[data-theme="rainbow"],
+html[data-theme="RAINBOW"],
+html[data-theme="rainbow"],
+[data-theme="RAINBOW"],
+[data-theme="rainbow"],
+.theme-rainbow,
+.theme-RAINBOW {
+  --bg-main: #faf5ff;
+  --bg-card: #ffffff;
+  --bg-hover: #f3e8ff;
+
+  --border: #e9d5ff;
+
+  --text-primary: #2e1065;
+  --text-secondary: #6b21a8;
+
+  --accent: #7c3aed;
+  --accent-hover: #6d28d9;
+  --accent-light: #ede9fe;
+
+  --accent-text: #7c3aed;
+  --accent-border: #c084fc;
+}
+
+
+/* =========================================================
+   Common surface helpers
+   ========================================================= */
+
+.card,
+.panel,
+.surface {
+  background-color: var(--bg-card);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+
+.muted {
+  color: var(--text-secondary);
+}
+
+.accent-text {
+  color: var(--accent-text);
+}
+
+.accent-border {
+  border-color: var(--accent-border);
+}
+
+.accent-bg {
+  background-color: var(--accent);
+  color: #ffffff;
+}
+
+.accent-bg:hover {
+  background-color: var(--accent-hover);
+}
+
+.accent-soft {
+  background-color: var(--accent-light);
+  color: var(--accent-text);
+}
+
+.hover-surface:hover {
+  background-color: var(--bg-hover);
+}
+
+
+/* =========================================================
+   Inputs
+   ========================================================= */
+
+input,
+textarea,
+select {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-secondary);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--accent);
+  outline-color: var(--accent);
+}
+
+
+/* =========================================================
+   Buttons
+   ========================================================= */
+
+button {
+  color: var(--text-primary);
+}
+
+button.primary {
+  background-color: var(--accent);
+  color: #ffffff !important;
+}
+
+button.primary:hover {
+  background-color: var(--accent-hover);
+}
+
+button.secondary {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+button.secondary:hover {
+  background-color: var(--bg-hover);
+  border-color: var(--accent-border);
+}
+
+/* High contrast white text for highlighted buttons across all themes including dark skin theme */
+button[class*="bg-[var(--accent)]"],
+.bg-accent-highlight,
+[class*="bg-[var(--accent)]"],
+.theme-black button[class*="bg-[var(--accent)]"],
+.theme-BLACK button[class*="bg-[var(--accent)]"],
+[data-theme="BLACK"] button[class*="bg-[var(--accent)]"],
+[data-theme="black"] button[class*="bg-[var(--accent)]"],
+[data-theme="BLACK"] .filter-chip.active,
+[data-theme="BLACK"] .badge.active,
+[data-theme="black"] .filter-chip.active,
+[data-theme="black"] .badge.active {
+  color: #ffffff !important;
+}
+
+
+/* =========================================================
+   Filter chips / badges
+   ========================================================= */
+
+.filter-chip,
+.badge {
+  background-color: var(--bg-card);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
+.filter-chip:hover,
+.badge:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.filter-chip.active,
+.badge.active {
+  background-color: var(--accent-light);
+  color: var(--accent-text);
+  border-color: var(--accent-border);
+}
+
+
+/* =========================================================
+   Tabs
+   ========================================================= */
+
+.tab {
+  color: var(--text-secondary);
+  border-bottom: 2px solid transparent;
+}
+
+.tab:hover {
+  color: var(--text-primary);
+}
+
+.tab.active {
+  color: var(--accent-text);
+  border-bottom-color: var(--accent);
+}
+
+
+/* =========================================================
+   Calendar styling & multi-day event bars
+   ========================================================= */
+
+.event-bar {
+  transition:
+    filter 0.15s ease-in-out,
+    transform 0.15s ease-in-out,
+    box-shadow 0.15s ease-in-out;
+}
+
+.event-bar:hover {
+  filter: brightness(0.97);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgb(15 23 42 / 0.12);
+}
