@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db/database.js';
 import { deduplicationService } from '../services/dedup.js';
+import { isSupabaseReady, fetchArticlesDirectly, fetchArticleDetailDirectly } from '../db/supabaseStore.js';
 
 const router = Router();
 
@@ -28,7 +29,7 @@ function getArticleRegion(a: any): string {
 }
 
 // GET /api/articles - List with faceted filters & sort
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   const {
     regions,
     categories,
@@ -63,6 +64,31 @@ router.get('/', (req, res) => {
   const excludeTagList = excludeTags ? (excludeTags as string).split(',').filter(Boolean) : [];
 
   const searchQuery = search ? (search as string).toLowerCase().trim() : '';
+
+  // Direct Supabase query if Supabase is connected (No internal cache)
+  if (isSupabaseReady()) {
+    try {
+      const data = await fetchArticlesDirectly({
+        regions: regionList,
+        categories: categoryList,
+        aiStatus: aiStatusList,
+        sources: sourceList,
+        languages: langList,
+        excludeCategories: excludeCategoryList,
+        excludeRegions: excludeRegionList,
+        excludeSources: excludeSourceList,
+        excludeLanguages: excludeLangList,
+        search: searchQuery,
+        sort: sort as string,
+        limit: Number(limit),
+        offset: Number(offset),
+        lang: lang as string
+      });
+      return res.json(data);
+    } catch (err: any) {
+      console.warn('[Articles API] Direct Supabase fetch fallback to local:', err?.message || err);
+    }
+  }
 
   let allArticles = Object.values(db.core.articles);
 
@@ -280,7 +306,32 @@ router.get('/', (req, res) => {
 });
 
 // GET /api/articles/:id - Detail view
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
+  // Direct Supabase query if Supabase is connected
+  if (isSupabaseReady()) {
+    try {
+      const detail = await fetchArticleDetailDirectly(req.params.id);
+      if (detail) {
+        return res.json({
+          article: detail,
+          localized: {
+            ko: detail.ko,
+            en: detail.en,
+            rw: detail.rw
+          },
+          ko: detail.ko,
+          en: detail.en,
+          rw: detail.rw,
+          similarArticles: [],
+          previousArticles: [],
+          futureArticles: []
+        });
+      }
+    } catch (err: any) {
+      console.warn('[Articles API] Direct Supabase detail fetch fallback:', err?.message || err);
+    }
+  }
+
   const art = db.core.articles[req.params.id];
   if (!art) {
     return res.status(404).json({ error: 'Article not found' });

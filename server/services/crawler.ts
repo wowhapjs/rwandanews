@@ -3,6 +3,7 @@ import { sourceRegistry } from '../sources/registry.js';
 import { deduplicationService } from './dedup.js';
 import { contentHash, normalizeTitle } from '../sources/utils/hash.js';
 import { ArticleRecord } from '../db/types.js';
+import { insertArticleDirectly, isArticleUrlExistingDirectly } from '../db/supabaseStore.js';
 
 export class CrawlerService {
   private activeRuns: Map<string, boolean> = new Map();
@@ -67,7 +68,10 @@ export class CrawlerService {
 
       // Ingest each discovered article
       for (const hint of discovery.articles) {
-        // Skip if already in DB
+        // Skip if already in Supabase (or memory)
+        const alreadyInSupabase = await isArticleUrlExistingDirectly(hint.url);
+        if (alreadyInSupabase) continue;
+
         const existingByUrl = Object.values(db.core.articles).find(a => a.source_url === hint.url);
         if (existingByUrl) continue;
 
@@ -113,20 +117,8 @@ export class CrawlerService {
             created_at: new Date().toISOString()
           };
 
-          // Run deterministic duplicate check
-          deduplicationService.processArticleDuplicates(newArticle);
-
-          // Run story clustering
-          const clusterId = deduplicationService.findStoryCluster(newArticle);
-          if (clusterId) {
-            newArticle.story_cluster_id = clusterId;
-            if (!db.core.storyClusterArticles[clusterId].includes(articleId)) {
-              db.core.storyClusterArticles[clusterId].push(articleId);
-              db.core.storyClusters[clusterId].article_count = db.core.storyClusterArticles[clusterId].length;
-            }
-          }
-
-          db.core.articles[articleId] = newArticle;
+          // Save directly to Supabase as primary database
+          await insertArticleDirectly(newArticle);
           importedCount++;
           db.core.sourceRuns[runId].articlesImported = importedCount;
         } catch (itemErr: any) {

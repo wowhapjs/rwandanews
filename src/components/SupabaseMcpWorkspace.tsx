@@ -350,12 +350,12 @@ DO UPDATE SET
               <h2 className="text-base font-bold text-[var(--text-primary)] flex items-center space-x-2">
                 <span>{t('mcp_workspace_title', currentLang)}</span>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                  {t('mcp_workspace_badge', currentLang)}
+                  Zero-Cache Direct Supabase
                 </span>
               </h2>
             </div>
             <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-              {t('mcp_workspace_desc', currentLang)}
+              서버 내부 메모리 복사 없이 Supabase를 직접 조회 및 갱신합니다. 에이전트와 DB 간의 업데이트가 즉시 실시간 반영됩니다.
             </p>
           </div>
 
@@ -364,10 +364,10 @@ DO UPDATE SET
               onClick={handleSyncArticles}
               disabled={syncingArticles}
               className="px-3.5 py-1.5 rounded-xl bg-emerald-600/20 border border-emerald-500/40 hover:bg-emerald-600/30 text-xs font-semibold text-emerald-300 flex items-center space-x-1.5 transition-colors cursor-pointer"
-              title="수집된 최신 기사를 Supabase public.articles로 즉시 동기화합니다"
+              title="내부 메모리 캐시 없이 Supabase를 직접 조회하고 상태를 확인합니다"
             >
-              <UploadCloud className={`w-3.5 h-3.5 ${syncingArticles ? 'animate-bounce' : ''}`} />
-              <span>{syncingArticles ? '동기화 중...' : 'Supabase 기사 동기화'}</span>
+              <CheckCircle2 className={`w-3.5 h-3.5 ${syncingArticles ? 'animate-spin' : ''}`} />
+              <span>{syncingArticles ? '조회 중...' : 'Supabase 직접 연동 상태'}</span>
             </button>
 
             <button

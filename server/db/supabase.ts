@@ -612,39 +612,10 @@ export async function executeFullMigrationToSupabase(): Promise<{
 
 /**
  * Background Auto-Migrator:
- * Polls Supabase every 5 seconds; as soon as the tables are detected,
- * automatically transfers all local data to Supabase and deletes the local DB!
+ * Disabled as Supabase is directly referenced and in-memory cache has been removed.
  */
-let autoMigratorTimer: NodeJS.Timeout | null = null;
-
 export function startSupabaseAutoMigrator(): void {
-  if (autoMigratorTimer) return;
-
-  autoMigratorTimer = setInterval(async () => {
-    if (migrationState.migrated || migrationState.inProgress) return;
-
-    const config = getSupabaseConfig();
-    if (!config.configured) return;
-
-    try {
-      const conn = await testSupabaseConnection();
-      if (conn.tablesExist) {
-        console.log('[Supabase Auto-Migrator] Tables detected in Supabase! Initiating automatic migration...');
-        const result = await executeFullMigrationToSupabase();
-        if (result.success) {
-          console.log('[Supabase Auto-Migrator] Automatic migration completed successfully!');
-          if (autoMigratorTimer) {
-            clearInterval(autoMigratorTimer);
-            autoMigratorTimer = null;
-          }
-        }
-      }
-    } catch (err) {
-      // Ignore transient errors
-    }
-  }, 5000);
-
-  autoMigratorTimer.unref();
+  // No-op: Supabase is directly referenced as the single source of truth without in-memory caching.
 }
 
 /**

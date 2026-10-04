@@ -2,12 +2,14 @@ import { Router } from 'express';
 import { db } from '../db/database.js';
 import { sourceRegistry } from '../sources/registry.js';
 import { crawlerService } from '../services/crawler.js';
+import { fetchSourceArticleCountsDirectly } from '../db/supabaseStore.js';
 
 const router = Router();
 
 // GET /api/sources - List all sources with status & discovery metrics
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   const allMeta = sourceRegistry.getAllMetadata();
+  const directCounts = await fetchSourceArticleCountsDirectly();
 
   const enriched = allMeta.map(meta => {
     const record = db.core.sources[meta.id] || {
@@ -18,8 +20,8 @@ router.get('/', (req, res) => {
 
     const checkpoint = db.core.sourceCheckpoints[meta.id];
 
-    // Articles count from this source
-    const articlesFromSource = Object.values(db.core.articles).filter(a => a.source_id === meta.id);
+    // Articles count from this source directly from Supabase
+    const articlesCount = directCounts[meta.id] ?? 0;
 
     // Runs
     const runs = Object.values(db.core.sourceRuns)
@@ -33,8 +35,8 @@ router.get('/', (req, res) => {
       ...meta,
       enabled: record.enabled ?? true,
       isRunning,
-      articlesDiscovered: articlesFromSource.length,
-      articlesImported: articlesFromSource.length,
+      articlesDiscovered: articlesCount,
+      articlesImported: articlesCount,
       checkpoint,
       lastRun
     };

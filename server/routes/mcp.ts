@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { db } from '../db/database.js';
 import {
   getSupabaseConfig,
+  getSupabaseClient,
   generateSupabaseDDL,
   saveProcessedArticleToSupabase,
   testSupabaseConnection,
@@ -9,6 +10,14 @@ import {
   syncArticlesChunkToSupabase,
   syncAllMissingArticlesToSupabase
 } from '../db/supabase.js';
+import {
+  isSupabaseReady,
+  fetchBatchGroupsDirectly,
+  fetchGroupArticlesDirectly,
+  fetchArticleDetailDirectly,
+  saveProcessedArticleDirectly,
+  getArticleNumberMap
+} from '../db/supabaseStore.js';
 
 const router = Router();
 
@@ -143,29 +152,45 @@ export function computeBatchGroups(): {
 /**
  * Generates prompt for a specific 30-item agent group
  */
-export function generateAgentPrompt(groupNumber: number, _baseUrl?: string): string {
-  const { groups } = computeBatchGroups();
-  const group = groups.find(g => g.group_number === groupNumber);
-  const agentNumber = group ? group.agent_number : ((groupNumber - 1) % 5) + 1;
-  const numberRange = group ? group.number_range : `Group #${groupNumber}`;
+export function generateAgentPrompt(
+  groupNumber: number,
+  _baseUrl?: string,
+  customChunk?: any[],
+  customNumberRange?: string
+): string {
+  let chunk = customChunk;
+  let numberRange = customNumberRange;
+  let agentNumber = ((groupNumber - 1) % 5) + 1;
 
-  // Get articles in this group
-  const allArticles = Object.values(db.core.articles).sort((a, b) => {
-    const da = a.published_at || a.created_at || '';
-    const dbTime = b.published_at || b.created_at || '';
-    return dbTime.localeCompare(da);
-  });
-  const dateCounters: Record<string, number> = {};
-  const formattedNumbers = new Map<string, string>();
-  for (const art of allArticles) {
-    formattedNumbers.set(art.article_id, formatArticleNumber(art, dateCounters));
+  if (!chunk || chunk.length === 0) {
+    const { groups } = computeBatchGroups();
+    const group = groups.find(g => g.group_number === groupNumber);
+    agentNumber = group ? group.agent_number : ((groupNumber - 1) % 5) + 1;
+    numberRange = group ? group.number_range : `Group #${groupNumber}`;
+
+    // Get articles in this group
+    const allArticles = Object.values(db.core.articles).sort((a, b) => {
+      const da = a.published_at || a.created_at || '';
+      const dbTime = b.published_at || b.created_at || '';
+      return dbTime.localeCompare(da);
+    });
+    const dateCounters: Record<string, number> = {};
+    const formattedNumbers = new Map<string, string>();
+    for (const art of allArticles) {
+      formattedNumbers.set(art.article_id, formatArticleNumber(art, dateCounters));
+    }
+    const startIndex = (groupNumber - 1) * BATCH_GROUP_SIZE;
+    chunk = allArticles.slice(startIndex, startIndex + BATCH_GROUP_SIZE).map((art, idx) => ({
+      ...art,
+      article_number: formattedNumbers.get(art.article_id) || `#${startIndex + idx + 1}`
+    }));
   }
+
   const startIndex = (groupNumber - 1) * BATCH_GROUP_SIZE;
-  const chunk = allArticles.slice(startIndex, startIndex + BATCH_GROUP_SIZE);
 
   // User requirement: Only provide sequential number & article ID (do NOT include source, date, title, or summary snippets)
   const articleListText = chunk.map((art, idx) => {
-    const artNum = formattedNumbers.get(art.article_id) || `#${startIndex + idx + 1}`;
+    const artNum = art.article_number || `#${startIndex + idx + 1}`;
     return `${idx + 1}. ${artNum} · ID: \`${art.article_id}\``;
   }).join('\n');
 
@@ -344,39 +369,76 @@ ${articleListText}
 }
 
 /**
- * Generates prompt for 150-article batch Topic classification (5 groups * 30 items)
+ * Generates prompt for 150-article batch Topic classification (5 groups * 30 items) directly from Supabase
  */
-export function generateBatchTopicPrompt(batchIndex: number): {
+export async function generateBatchTopicPrompt(batchIndex: number): Promise<{
   batch_index: number;
   start_group: number;
   end_group: number;
   total_items: number;
   prompt: string;
-} {
+}> {
   const startGroup = (batchIndex - 1) * 5 + 1;
   const endGroup = startGroup + 4;
-  const { groups } = computeBatchGroups();
-
-  const allArticles = Object.values(db.core.articles).sort((a, b) => {
-    const da = a.published_at || a.created_at || '';
-    const dbTime = b.published_at || b.created_at || '';
-    return dbTime.localeCompare(da);
-  });
-  const dateCounters: Record<string, number> = {};
-  const formattedNumbers = new Map<string, string>();
-  for (const art of allArticles) {
-    formattedNumbers.set(art.article_id, formatArticleNumber(art, dateCounters));
-  }
-
   const startIndex = (startGroup - 1) * BATCH_GROUP_SIZE;
   const count = 5 * BATCH_GROUP_SIZE; // 150 items
-  const chunk150 = allArticles.slice(startIndex, startIndex + count);
+  const client = getSupabaseClient();
+
+  let chunk150: any[] = [];
+  if (client) {
+    const { data, error } = await client
+      .from('articles')
+      .select('article_id, original_language, original_title, original_body, published_at, topic, portal_category_id')
+      .order('published_at', { ascending: false })
+      .range(startIndex, startIndex + count - 1);
+    if (data && !error) {
+      chunk150 = data;
+    }
+  }
+
+  // Fallback to local in-memory articles if client not configured
+  if (chunk150.length === 0) {
+    const allArticles = Object.values(db.core.articles).sort((a, b) => {
+      const da = a.published_at || a.created_at || '';
+      const dbTime = b.published_at || b.created_at || '';
+      return dbTime.localeCompare(da);
+    });
+    chunk150 = allArticles.slice(startIndex, startIndex + count);
+  }
+
+  // Fetch localized Korean titles for these 150 articles to provide richest context
+  const articleIds = chunk150.map(a => a.article_id);
+  const koTitleMap = new Map<string, string>();
+  if (client && articleIds.length > 0) {
+    const { data: locs } = await client
+      .from('localized_articles')
+      .select('article_id, title')
+      .in('article_id', articleIds)
+      .eq('lang', 'ko');
+    if (locs) {
+      for (const l of locs) {
+        if (l.title) koTitleMap.set(l.article_id, l.title.trim());
+      }
+    }
+  }
+
+  // Get consistent #YYMMDD-XXX numbering
+  const formattedNumbers = await getArticleNumberMap();
 
   const articleRows = chunk150.map((art, idx) => {
     const artNum = formattedNumbers.get(art.article_id) || `#${startIndex + idx + 1}`;
-    const cleanTitle = (art.original_title || '').replace(/\r?\n+/g, ' ').slice(0, 100);
-    const cleanSnippet = (art.original_body || '').replace(/\r?\n+/g, ' ').slice(0, 120);
-    return `${idx + 1}. [${art.article_id}] ${artNum} | ${cleanTitle} | (요약: ${cleanSnippet}...)`;
+    const koTitle = koTitleMap.get(art.article_id);
+    const origTitle = (art.original_title || '').replace(/\r?\n+/g, ' ').trim().slice(0, 120);
+
+    let titleDisplay = origTitle;
+    if (koTitle && koTitle !== origTitle) {
+      titleDisplay = `${koTitle} (원문: ${origTitle})`;
+    }
+
+    const cleanSnippet = (art.original_body || '').replace(/\r?\n+/g, ' ').trim().slice(0, 150);
+    const bodySnippet = cleanSnippet ? ` | 본문: ${cleanSnippet}...` : '';
+
+    return `${idx + 1}. [${artNum} · \`${art.article_id}\`] ${titleDisplay}${bodySnippet}`;
   }).join('\n');
 
   const prompt = `# ChatGPT 에이전트 지침: 150개 기사 일괄 Topic 고속 재결정 에이전트 (Batch #${batchIndex} · 그룹 #${startGroup}~#${endGroup})
@@ -384,16 +446,21 @@ export function generateBatchTopicPrompt(batchIndex: number): {
 당신은 **뉴스 인텔리전스 150개 기사 일괄 Topic 재결정 전문 고속 에이전트 [Batch Topic Classifier]**입니다.
 총 5개 그룹(그룹 #${startGroup} ~ #${endGroup}, 총 ${chunk150.length}개 기사)의 제목과 핵심 내용을 신속하게 분석하여, 각 기사별 최적의 영문 대분류 Topic을 일괄 결정하고 Supabase DB에 한 번에 업데이트하는 고속 일괄 UPDATE SQL을 생성합니다.
 
-## 🎯 표준 영문 Topic 선택 기준 (반드시 아래 중 택 1)
-- **Economy**: 경제, 금융, 거시경제, 인플레이션, 통상, 무역, 비즈니스, 기업, 산업
-- **Politics**: 정치, 국회, 정부 정책, 외교, 조약, 정상회담, 사법, 법률, 안보
-- **AI/Tech**: 인공지능, IT, 소프트웨어, 반도체, 정보통신, 디지털 혁신, 스타트업
-- **Education**: 교육, 대학, 학교, 장학금, 직업훈련, 학술 연구, R&D
-- **Sports**: 축구, 농구, 올림픽, 마라톤, 각종 스포츠 경기 및 선수 소식
-- **Real Estate**: 부동산, 주택, 아파트, 건설, 토지, 도시개발, 인프라
-- **Volunteers**: 자원봉사, 인도주의적 구호, NGO, 자선, 사회공헌, 취약계층 지원
-- **Nature/Living**: 자연, 환경, 기후변화, 국립공원, 야생동물, 농업, 보건의료, 일상생활
-- **Culture**: 문화, 예술, 역사, 영화, 음악, 축제, 전통, 관광, 엔터테인먼트
+---
+
+## 📌 기사 분석 및 Topic 결정 원칙 (필독)
+1. **언어 무관 종합 분석**: 기사의 원문 언어(영어, 한국어, 키냐르완다어, 프랑스어 등)에 관계없이, 제공된 제목(국문 번역 제목 및 원문 제목)과 본문 요약을 바탕으로 분석하십시오.
+2. **제목 및 본문 내용 종합 참조**: 제목을 기본으로 참고하되, **제목만으로 핵심 분야가 불명확하거나 모호한 경우 반드시 함께 제공된 본문 내용 요약(본문: ...)을 적극 참조**하여 기사의 실질적인 주제를 정확히 파악하십시오.
+3. **표준 9대 영문 Topic 중 반드시 1개 선택**:
+   - **Economy**: 경제, 금융, 은행, 투자, 통상, 무역, 물가, 비즈니스, 기업, 산업 활동
+   - **Politics**: 정치, 국회, 정부 정책, 법률, 외교, 조약, 정상회담, 사법, 안보, 군사
+   - **AI/Tech**: IT, 소프트웨어, 인공지능, 통신, 디지털 혁신, 스타트업, 사이버보안
+   - **Education**: 교육, 학교, 대학, 장학금, 직업 훈련, 학술 연구, R&D
+   - **Sports**: 축구, 농구, 올림픽, 마라톤, 각종 스포츠 경기 및 선수 소식
+   - **Real Estate**: 부동산, 주택, 아파트, 토지, 건설, 인프라, 도시개발
+   - **Volunteers**: 자원봉사, 인도주의적 구호, NGO, 자선, 기부, 사회공헌, 취약계층 지원
+   - **Nature/Living**: 자연, 환경, 기후변화, 국립공원, 야생동물, 농업, 보건의료, 질병, 일상생활
+   - **Culture**: 문화, 예술, 역사, 영화, 음악, 축제, 전통, 관광, 엔터테인먼트
 
 ---
 
@@ -401,16 +468,15 @@ export function generateBatchTopicPrompt(batchIndex: number): {
 분석 완료 후, 아래와 같이 PostgreSQL의 고속 일괄 갱신 구문(UPDATE ... FROM VALUES)으로 한 번에 실행 가능한 단일 SQL을 출력하십시오:
 
 \`\`\`sql
--- [Batch #${batchIndex}] 150개 기사 일괄 Topic 갱신
+-- [Batch #${batchIndex}] 150개 기사 일괄 Topic 갱신 (그룹 #${startGroup}~#${endGroup})
 UPDATE public.articles AS a
 SET 
   topic = v.topic,
   updated_at = NOW()
 FROM (VALUES
-  ('ART-XXXX1', 'Economy'),
-  ('ART-XXXX2', 'AI/Tech'),
-  ('ART-XXXX3', 'Politics')
-  -- 150개 기사 전체 매핑...
+  ('${chunk150[0]?.article_id || 'ART-XXXX1'}', 'Economy'),
+  ('${chunk150[1]?.article_id || 'ART-XXXX2'}', 'AI/Tech')
+  -- ${chunk150.length}개 기사 전체 매핑...
 ) AS v(article_id, topic)
 WHERE a.article_id = v.article_id;
 \`\`\`
@@ -421,12 +487,12 @@ WHERE a.article_id = v.article_id;
 
 ${articleRows}
 
-지금 즉시 150개 기사의 내용을 파악하고, 각 기사의 영문 Topic을 결정하여 위 일괄 UPDATE SQL을 단번에 생성하십시오!`;
+지금 즉시 위 150개 기사의 내용을 파악하고, 각 기사의 영문 Topic을 결정하여 일괄 UPDATE SQL을 단번에 생성하십시오!`;
 
   return {
     batch_index: batchIndex,
     start_group: startGroup,
-    end_group: Math.min(endGroup, groups.length),
+    end_group: endGroup,
     total_items: chunk150.length,
     prompt
   };
@@ -436,37 +502,54 @@ ${articleRows}
 // Routes
 // ==========================================
 
-// GET /api/mcp/groups - 30-item grouping status
+// GET /api/mcp/groups - 30-item grouping status directly from Supabase
 router.get('/groups', async (_req, res) => {
-  const result = computeBatchGroups();
-  const supabase = getSupabaseConfig();
-
-  // Background sync assignments to Supabase if configured
-  if (supabase.configured) {
-    syncAssignmentsToSupabase(result.groups).catch(err => {
-      console.warn('[MCP] Auto-sync assignments to Supabase warning:', err?.message || err);
-    });
+  if (isSupabaseReady()) {
+    try {
+      const result = await fetchBatchGroupsDirectly();
+      return res.json({
+        ...result,
+        supabase_configured: true,
+        batch_size: BATCH_GROUP_SIZE
+      });
+    } catch (err: any) {
+      console.warn('[MCP groups] Direct Supabase fetch error:', err?.message || err);
+    }
   }
 
+  const result = computeBatchGroups();
   res.json({
     ...result,
-    supabase_configured: supabase.configured,
+    supabase_configured: isSupabaseReady(),
     batch_size: BATCH_GROUP_SIZE
   });
 });
 
 // GET /api/mcp/topic-prompt/:batchIndex - Return 150-article batch Topic classification prompt
-router.get('/topic-prompt/:batchIndex', (req, res) => {
+router.get('/topic-prompt/:batchIndex', async (req, res) => {
   const batchIdx = parseInt(req.params.batchIndex, 10) || 1;
-  const data = generateBatchTopicPrompt(batchIdx);
-  res.json(data);
+  try {
+    const data = await generateBatchTopicPrompt(batchIdx);
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // GET /api/mcp/group/:groupNumber - Get articles in specific 30-item group
-router.get('/group/:groupNumber', (req, res) => {
+router.get('/group/:groupNumber', async (req, res) => {
   const groupNum = parseInt(req.params.groupNumber, 10);
   if (isNaN(groupNum) || groupNum < 1) {
     return res.status(400).json({ error: '올바른 그룹 번호를 입력해주세요.' });
+  }
+
+  if (isSupabaseReady()) {
+    try {
+      const data = await fetchGroupArticlesDirectly(groupNum);
+      return res.json(data);
+    } catch (err: any) {
+      console.warn('[MCP group] Direct Supabase fetch fallback to local:', err?.message || err);
+    }
   }
 
   const allArticles = Object.values(db.core.articles).sort((a, b) => {
@@ -539,7 +622,30 @@ router.get('/group/:groupNumber', (req, res) => {
 });
 
 // GET /api/mcp/article/:id - Get single article
-router.get('/article/:id', (req, res) => {
+router.get('/article/:id', async (req, res) => {
+  if (isSupabaseReady()) {
+    try {
+      const art = await fetchArticleDetailDirectly(req.params.id);
+      if (art) {
+        return res.json({
+          article_id: art.article_id,
+          source_id: art.source_id,
+          source_name: art.source_id,
+          source_url: art.source_url,
+          original_language: art.original_language,
+          original_title: art.original_title,
+          original_subtitle: art.original_subtitle,
+          original_body: art.original_body,
+          published_at: art.published_at,
+          portal_category_id: art.portal_category_id,
+          processing_status: art.processing_status
+        });
+      }
+    } catch (err: any) {
+      console.warn('[MCP article] Direct Supabase fetch fallback to local:', err?.message || err);
+    }
+  }
+
   const art = db.core.articles[req.params.id];
   if (!art) {
     return res.status(404).json({ error: `기사 [${req.params.id}]를 찾을 수 없습니다.` });
@@ -586,7 +692,7 @@ router.post('/save-article', async (req, res) => {
   }
 
   try {
-    const result = await saveProcessedArticleToSupabase({
+    const result = await saveProcessedArticleDirectly({
       article_id,
       topic: topic || 'General',
       title_ko,
@@ -618,28 +724,20 @@ router.get('/prompt/:groupNumber', async (req, res) => {
   const groupNum = parseInt(req.params.groupNumber, 10) || 1;
   const baseUrl = `${req.protocol}://${req.get('host')}`;
 
-  // Automatically ensure the 30 articles in this group exist in Supabase public.articles
-  try {
-    const allArticles = Object.values(db.core.articles).sort((a, b) => {
-      const da = a.published_at || a.created_at || '';
-      const dbTime = b.published_at || b.created_at || '';
-      return dbTime.localeCompare(da);
-    });
-    const startIndex = (groupNum - 1) * BATCH_GROUP_SIZE;
-    const chunk = allArticles.slice(startIndex, startIndex + BATCH_GROUP_SIZE);
-    
-    // Sync this group's 30 articles to Supabase
-    await syncArticlesChunkToSupabase(chunk);
+  let chunk: any[] = [];
+  let numberRange = `Group #${groupNum}`;
 
-    // Also trigger full background sync of any other missing articles
-    syncAllMissingArticlesToSupabase().catch(err => {
-      console.warn('[MCP] Background sync missing articles warning:', err?.message || err);
-    });
-  } catch (err: any) {
-    console.warn('[MCP] Pre-syncing group articles to Supabase error:', err?.message || err);
+  if (isSupabaseReady()) {
+    try {
+      const gData = await fetchGroupArticlesDirectly(groupNum);
+      chunk = gData.articles || [];
+      numberRange = gData.number_range || numberRange;
+    } catch (err: any) {
+      console.warn('[MCP prompt] Direct Supabase fetch error:', err?.message || err);
+    }
   }
 
-  const prompt = generateAgentPrompt(groupNum, baseUrl);
+  const prompt = generateAgentPrompt(groupNum, baseUrl, chunk, numberRange);
   res.json({ group_number: groupNum, prompt });
 });
 
@@ -657,14 +755,15 @@ router.get('/supabase/status', async (_req, res) => {
   });
 });
 
-// POST /api/mcp/sync-articles - Synchronize all local articles to Supabase
+// POST /api/mcp/sync-articles - Check Supabase direct state and refresh
 router.post('/sync-articles', async (_req, res) => {
   try {
-    const { synced, error } = await syncAllMissingArticlesToSupabase();
-    if (error) {
-      return res.status(500).json({ success: false, error });
-    }
-    res.json({ success: true, count: synced, message: `${synced}개 기사가 Supabase에 성공적으로 동기화되었습니다.` });
+    const test = await testSupabaseConnection();
+    res.json({
+      success: true,
+      count: test.articleCount || 0,
+      message: `서버 내부 캐시 복사 절차가 완전히 삭제되었습니다. 현재 ${test.articleCount || 0}개의 모든 기사가 Supabase를 직접 참조하고 있습니다.`
+    });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -826,12 +925,16 @@ router.post('/rpc', async (req, res) => {
       const args = params?.arguments || {};
 
       if (toolName === 'get_batch_groups') {
-        const data = computeBatchGroups();
+        const data = isSupabaseReady() ? await fetchBatchGroupsDirectly() : computeBatchGroups();
         return res.json({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: JSON.stringify(data) }] } });
       }
 
       if (toolName === 'get_group_articles') {
         const groupNum = args.group_number || 1;
+        if (isSupabaseReady()) {
+          const groupData = await fetchGroupArticlesDirectly(groupNum);
+          return res.json({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: JSON.stringify(groupData.articles || []) }] } });
+        }
         const allArticles = Object.values(db.core.articles).sort((a, b) => {
           const da = a.published_at || a.created_at || '';
           const dbTime = b.published_at || b.created_at || '';
@@ -843,7 +946,10 @@ router.post('/rpc', async (req, res) => {
       }
 
       if (toolName === 'get_raw_article') {
-        const art = db.core.articles[args.article_id];
+        let art = isSupabaseReady() ? await fetchArticleDetailDirectly(args.article_id) : db.core.articles[args.article_id];
+        if (!art && !isSupabaseReady()) {
+          art = db.core.articles[args.article_id];
+        }
         if (!art) {
           return res.json({ jsonrpc: '2.0', id, error: { code: -32602, message: 'Article not found' } });
         }
@@ -851,7 +957,7 @@ router.post('/rpc', async (req, res) => {
       }
 
       if (toolName === 'save_processed_article') {
-        const saveRes = await saveProcessedArticleToSupabase(args);
+        const saveRes = await saveProcessedArticleDirectly(args);
         return res.json({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: JSON.stringify(saveRes) }] } });
       }
 

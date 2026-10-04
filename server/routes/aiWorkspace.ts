@@ -3,6 +3,7 @@ import multer from 'multer';
 import { db } from '../db/database.js';
 import { excelService, extractExcelFilesFromUploads } from '../services/excel.js';
 import { integratedArticleService } from '../services/integrated.js';
+import { isSupabaseReady, fetchAiMetricsDirectly } from '../db/supabaseStore.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 const router = Router();
@@ -40,7 +41,35 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 
 // GET /api/ai/metrics - Processing status dashboard
-router.get('/metrics', (req, res) => {
+router.get('/metrics', async (req, res) => {
+  if (isSupabaseReady()) {
+    try {
+      const supaMetrics = await fetchAiMetricsDirectly();
+      const totalBatches = Object.keys(db.core.aiBatches).length;
+      const totalEvents = Object.keys(db.core.events).length;
+      const totalTags = Object.keys(db.core.tagConcepts).length;
+      const queuedUrls = Object.values(db.core.eventUrls).filter(u => u.status === 'READY' || u.status === 'QUEUED').length;
+
+      return res.json({
+        articles: {
+          total: supaMetrics.totalArticles,
+          raw: supaMetrics.totalRaw,
+          exportReady: 0,
+          exported: supaMetrics.totalExported,
+          partial: supaMetrics.totalPartialLocalized,
+          processed: supaMetrics.totalProcessed,
+          error: 0
+        },
+        batches: totalBatches,
+        events: totalEvents,
+        tags: totalTags,
+        queuedUrls
+      });
+    } catch (err: any) {
+      console.warn('[AI Workspace] Metrics direct Supabase error:', err.message);
+    }
+  }
+
   const articles = Object.values(db.core.articles);
   const raw = articles.filter(a => a.processing_status === 'RAW').length;
   const exportReady = articles.filter(a => a.processing_status === 'EXPORT_READY').length;

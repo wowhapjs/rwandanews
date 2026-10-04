@@ -312,17 +312,8 @@ export class DatabaseManager {
   private loadFromSqlite(): void {
     if (!this.sqlite) return;
     try {
-      // 1. Articles
-      const articlesRows = this.sqlite.prepare('SELECT raw_record FROM articles').all() as Array<{ raw_record: string }>;
-      for (const row of articlesRows) {
-        if (!row.raw_record) continue;
-        try {
-          const art = JSON.parse(row.raw_record) as ArticleRecord;
-          if (art && art.article_id && !MOCK_ARTICLE_IDS.has(art.article_id)) {
-            this.core.articles[art.article_id] = art;
-          }
-        } catch {}
-      }
+      // 1. Articles - Zero In-Memory Cache (Direct Reference)
+      // Bulk articles are referenced directly from primary storage without keeping in-memory copies.
 
       // 2. Sources
       const sourceRows = this.sqlite.prepare('SELECT raw_record FROM sources').all() as Array<{ raw_record: string }>;
@@ -408,17 +399,8 @@ export class DatabaseManager {
         } catch {}
       }
 
-      // 8. Localized Articles
-      const locRows = this.sqlite.prepare('SELECT article_id, lang, raw_record FROM localized_articles').all() as Array<{ article_id: string; lang: string; raw_record: string }>;
-      for (const row of locRows) {
-        if (!row.raw_record || MOCK_ARTICLE_IDS.has(row.article_id)) continue;
-        try {
-          const locArt = JSON.parse(row.raw_record) as LocalizedArticleRecord;
-          if (row.lang === 'ko') this.ko.articles[row.article_id] = locArt;
-          else if (row.lang === 'en') this.en.articles[row.article_id] = locArt;
-          else if (row.lang === 'rw') this.rw.articles[row.article_id] = locArt;
-        } catch {}
-      }
+      // 8. Localized Articles - Zero In-Memory Cache (Direct Reference)
+      // Localized translations are referenced directly from primary storage.
 
       // 9. Portal KV collections
       const kvRows = this.sqlite.prepare('SELECT collection, key, value FROM portal_kv').all() as Array<{ collection: string; key: string; value: string }>;
@@ -962,79 +944,10 @@ export class DatabaseManager {
         }
       }
 
-      // 2. Articles (paginate in 1000 chunks)
-      let from = 0;
-      const CHUNK = 1000;
-      while (true) {
-        const { data: arts, error: artErr } = await client
-          .from('articles')
-          .select('*')
-          .range(from, from + CHUNK - 1);
+      // Note: Articles and localized articles are referenced directly from Supabase.
+      // The server does NOT copy or cache articles into internal memory.
 
-        if (artErr || !arts || arts.length === 0) break;
-
-        for (const a of arts) {
-          if (MOCK_ARTICLE_IDS.has(a.article_id)) continue;
-          this.core.articles[a.article_id] = {
-            article_id: a.article_id,
-            source_id: a.source_id,
-            source_url: a.source_url,
-            canonical_url: a.canonical_url,
-            original_language: a.original_language,
-            original_title: a.original_title,
-            original_subtitle: a.original_subtitle,
-            original_body: a.original_body,
-            author: a.author,
-            published_at: a.published_at,
-            collected_at: a.collected_at,
-            source_section: a.source_section,
-            source_subcategory: a.source_subcategory,
-            portal_category_id: a.portal_category_id,
-            lead_image_url: a.lead_image_url,
-            image_urls: a.image_urls || [],
-            content_blocks: a.content_blocks || [],
-            processing_status: a.processing_status || 'RAW',
-            normalized_title: a.normalized_title,
-            content_hash: a.content_hash,
-            story_cluster_id: a.story_cluster_id,
-            created_at: a.created_at
-          };
-        }
-        if (arts.length < CHUNK) break;
-        from += CHUNK;
-      }
-
-      // 3. Localized Articles
-      let locFrom = 0;
-      while (true) {
-        const { data: locs, error: locErr } = await client
-          .from('localized_articles')
-          .select('*')
-          .range(locFrom, locFrom + CHUNK - 1);
-
-        if (locErr || !locs || locs.length === 0) break;
-
-        for (const l of locs) {
-          if (MOCK_ARTICLE_IDS.has(l.article_id)) continue;
-          const rec: LocalizedArticleRecord = {
-            article_id: l.article_id,
-            title: l.title,
-            subtitle: l.subtitle,
-            summary: l.summary,
-            body: l.body,
-            category_label: l.category_label,
-            processed_at: l.processed_at,
-            batch_id: l.batch_id
-          };
-          if (l.lang === 'ko') this.ko.articles[l.article_id] = rec;
-          else if (l.lang === 'en') this.en.articles[l.article_id] = rec;
-          else if (l.lang === 'rw') this.rw.articles[l.article_id] = rec;
-        }
-        if (locs.length < CHUNK) break;
-        locFrom += CHUNK;
-      }
-
-      // 4. Portal KV (events, batches, tags, settings)
+      // 2. Portal KV (events, batches, tags, settings)
       const { data: kvs } = await client.from('portal_kv').select('*');
       if (kvs && kvs.length > 0) {
         for (const kv of kvs) {
@@ -1048,7 +961,7 @@ export class DatabaseManager {
       }
 
       this.isSupabasePrimary = true;
-      console.log(`[DatabaseManager] Successfully loaded from Supabase: ${Object.keys(this.core.articles).length} articles, ${Object.keys(this.core.sources).length} sources.`);
+      console.log(`[DatabaseManager] Connected to Supabase directly (Zero-Cache Direct Mode): ${Object.keys(this.core.sources).length} sources loaded.`);
       return true;
     } catch (err) {
       console.error('[DatabaseManager] Error loading from Supabase:', err);
