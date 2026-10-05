@@ -1,0 +1,16 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rwanda-news
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATA_DIR: /app-data
+    ports:
+      - "127.0.0.1:31001:3000"
+    volumes:
+      - /var/lib/web-manager/site-data/rwanda-news:/app-data
+      - /var/lib/web-manager/site-uploads/rwanda-news:/app/public/uploads
