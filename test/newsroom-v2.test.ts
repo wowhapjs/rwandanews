@@ -5,12 +5,20 @@ import { assertArticleTransition, canTransitionArticle } from '../server/service
 import { buildClusterRecoveryPlan, buildRestoreMap } from '../server/services/storyRecovery';
 import { buildStoryAgentCommand, parseStoryAgentResult } from '../server/services/storyAgentProtocol';
 import { validateArticleImageUpload } from '../server/services/imageUploadPolicy';
+import { canEditOwnedArticle, requireAdmin } from '../server/services/authz';
 
 test('role presentation modes never grant admin mode to reporter', () => {
   assert.equal(canUseMode('ADMIN', 'reader'), true);
   assert.equal(canUseMode('ADMIN', 'reporter'), true);
   assert.equal(canUseMode('REPORTER', 'admin'), false);
   assert.equal(canUseMode('READER', 'reporter'), false);
+});
+
+test('server authorization is independent from presentation mode', () => {
+  assert.equal(canEditOwnedArticle({ id: 'r1', role: 'REPORTER' }, 'r1'), true);
+  assert.equal(canEditOwnedArticle({ id: 'r1', role: 'REPORTER' }, 'r2'), false);
+  assert.equal(canEditOwnedArticle({ id: 'a1', role: 'ADMIN' }, 'r2'), true);
+  assert.throws(() => requireAdmin({ id: 'r1', role: 'REPORTER' }));
 });
 
 test('publishing requires admin or direct-publish policy', () => {
