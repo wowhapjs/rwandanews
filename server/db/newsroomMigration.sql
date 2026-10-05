@@ -1,11 +1,12 @@
--- Newsroom v2 additive PostgreSQL schema. No DROP/DELETE operations.
+-- Newsroom v2 additive SQLite schema. No DROP/DELETE operations.
+-- Supabase deployments should apply an equivalent PostgreSQL migration separately.
 create table if not exists newsroom_profiles (
   user_id text primary key,
   display_name text,
   role text not null default 'READER' check (role in ('READER','REPORTER','ADMIN')),
-  can_publish_directly boolean not null default false,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  can_publish_directly integer not null default 0,
+  created_at text not null default (datetime('now')),
+  updated_at text not null default (datetime('now'))
 );
 
 create table if not exists newsroom_article_revisions (
@@ -16,7 +17,7 @@ create table if not exists newsroom_article_revisions (
   subtitle text,
   body_markdown text not null,
   workflow_state text not null check (workflow_state in ('DRAFT','IN_REVIEW','PUBLISHED','ARCHIVED')),
-  created_at timestamptz not null default now()
+  created_at text not null default (datetime('now'))
 );
 create index if not exists idx_newsroom_revisions_article on newsroom_article_revisions(article_id, created_at desc);
 
@@ -28,7 +29,7 @@ create table if not exists newsroom_images (
   alt text,
   caption text,
   credit text,
-  created_at timestamptz not null default now()
+  created_at text not null default (datetime('now'))
 );
 
 create table if not exists newsroom_audit_events (
@@ -37,26 +38,26 @@ create table if not exists newsroom_audit_events (
   action text not null,
   target_type text not null,
   target_id text not null,
-  before_json jsonb,
-  after_json jsonb,
-  created_at timestamptz not null default now()
+  before_json text,
+  after_json text,
+  created_at text not null default (datetime('now'))
 );
 create index if not exists idx_newsroom_audit_target on newsroom_audit_events(target_type, target_id, created_at desc);
 
 create table if not exists story_agent_batches (
   batch_id text primary key,
   status text not null default 'PENDING' check (status in ('PENDING','VALIDATED','APPLIED','REVERTED')),
-  article_ids_json jsonb not null,
-  proposed_json jsonb,
+  article_ids_json text not null,
+  proposed_json text,
   created_by text not null,
-  created_at timestamptz not null default now(),
-  applied_at timestamptz
+  created_at text not null default (datetime('now')),
+  applied_at text
 );
 
 create table if not exists story_cluster_recovery_snapshots (
   snapshot_id text primary key,
   created_by text not null,
-  associations_json jsonb not null,
-  created_at timestamptz not null default now(),
-  restored_at timestamptz
+  associations_json text not null,
+  created_at text not null default (datetime('now')),
+  restored_at text
 );
