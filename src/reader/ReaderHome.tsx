@@ -1,0 +1,8 @@
+import React from 'react';
+
+export interface ReaderArticleCard { id: string; title: string; summary?: string; imageUrl?: string; source?: string; publishedLabel?: string; }
+
+export function ReaderHome({ articles, onOpen }: { articles: ReaderArticleCard[]; onOpen: (id: string) => void }) {
+  const [lead, ...latest] = articles;
+  return <div className="space-y-7 p-4">{lead && <button type="button" onClick={() => onOpen(lead.id)} className="block w-full overflow-hidden rounded-2xl bg-slate-950 text-left text-white">{lead.imageUrl && <img src={lead.imageUrl} alt="" className="aspect-[16/9] w-full object-cover" loading="eager"/>}<div className="p-5"><span className="text-xs font-bold uppercase tracking-wider text-slate-300">Top Story</span><h1 className="mt-2 text-2xl font-black leading-tight">{lead.title}</h1>{lead.summary && <p className="mt-2 line-clamp-3 text-sm text-slate-300">{lead.summary}</p>}</div></button>}<section><div className="mb-2 flex items-end justify-between"><h2 className="text-xl font-black">Latest</h2><span className="text-xs text-slate-500">최신 뉴스</span></div><div className="divide-y border-y">{latest.map(article => <button type="button" key={article.id} onClick={() => onOpen(article.id)} className="grid min-h-28 w-full grid-cols-[1fr_96px] gap-3 py-4 text-left"><div><h3 className="font-bold leading-snug">{article.title}</h3><p className="mt-2 text-xs text-slate-500">{[article.source, article.publishedLabel].filter(Boolean).join(' · ')}</p></div>{article.imageUrl ? <img src={article.imageUrl} alt="" className="h-20 w-24 rounded-lg object-cover" loading="lazy"/> : <div className="h-20 w-24 rounded-lg bg-slate-100"/>}</button>)}</div></section></div>;
+}
