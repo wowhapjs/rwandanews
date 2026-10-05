@@ -1,0 +1,11 @@
+import React from 'react';
+import { AppMode, canUseMode, UserProfile } from '../auth/roles';
+
+const labels: Record<AppMode, string> = { reader: '독자', reporter: '기자', admin: '관리자' };
+
+export function RoleModeSwitcher({ profile, mode, onChange }: { profile: UserProfile; mode: AppMode; onChange: (mode: AppMode) => void }) {
+  const modes: AppMode[] = ['reader', 'reporter', 'admin'];
+  return <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm" aria-label="화면 모드">
+    {modes.filter(item => canUseMode(profile.role, item)).map(item => <button key={item} type="button" onClick={() => onChange(item)} aria-pressed={mode === item} className={`min-h-10 rounded-lg px-3 text-sm font-semibold ${mode === item ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>{labels[item]}</button>)}
+  </div>;
+}
