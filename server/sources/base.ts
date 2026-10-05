@@ -23,6 +23,16 @@ function convertCheerioElementToMarkdown(
   // Clone element so modifications don't break the original DOM
   const clone = el.clone();
 
+  // If root element itself is an anchor link
+  if (clone.is('a')) {
+    const href = clone.attr('href')?.trim();
+    const text = clone.text().trim();
+    if (href && text) {
+      const fullUrl = href.startsWith('http') ? href : new URL(href, baseUrl).toString();
+      return decodeHtmlEntities(`[${text}](${fullUrl})`);
+    }
+  }
+
   // Replace <br> and <br/> with newline placeholder
   clone.find('br').replaceWith('\n');
 
@@ -161,7 +171,7 @@ export abstract class BaseSourceAdapter implements SourceAdapter {
           }
         }
       } else if (tagName.startsWith('h')) {
-        const text = normalizeWhitespace(el.text());
+        const text = convertCheerioElementToMarkdown($, el, baseUrl);
         if (text) {
           const level = parseInt(tagName.replace('h', ''), 10) || 2;
           const mdPrefix = '#'.repeat(Math.min(Math.max(level, 1), 6));

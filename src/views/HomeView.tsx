@@ -13,6 +13,14 @@ import {
 } from 'lucide-react';
 import { t } from '../lib/i18n';
 
+const getDisplayTopic = (art: { topic?: string; portal_category_id?: string }): string => {
+  const val = art.topic || art.portal_category_id;
+  if (!val || val === 'undefined' || val === 'null' || val.trim() === '') {
+    return 'General';
+  }
+  return val.trim();
+};
+
 interface HomeViewProps {
   onNavigate: (tab: ActiveTab) => void;
   onSelectArticle: (articleId: string) => void;
@@ -138,8 +146,12 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, onSelectArticle,
               >
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-[11px] text-[var(--text-secondary)]">
-                    <span className="font-bold px-2 py-0.5 rounded bg-[var(--bg-hover)] text-[var(--text-primary)] uppercase">
-                      {art.source_id}
+                    <span className={`font-bold px-2 py-0.5 rounded uppercase text-[10px] ${
+                      art.source_id === 'grouping'
+                        ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
+                        : 'bg-[var(--bg-hover)] text-[var(--text-primary)]'
+                    }`}>
+                      {art.source_id === 'grouping' ? 'Grouping · 종합' : art.source_id}
                     </span>
                     <span>{(art.published_at || '').slice(0, 10)}</span>
                   </div>
@@ -155,7 +167,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, onSelectArticle,
 
                 <div className="pt-2 border-t border-[var(--border)] flex items-center justify-between text-[11px] text-[var(--text-secondary)]">
                   <span className="uppercase font-mono text-[10px]">
-                    {(art.original_language || '').toUpperCase()} &middot; {art.portal_category_id}
+                    {(art.original_language || '').toUpperCase()} &middot; {getDisplayTopic(art)}
                   </span>
                   {art.relatedStoriesCount > 0 && (
                     <span className="text-[var(--accent)] font-semibold">

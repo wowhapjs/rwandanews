@@ -21,6 +21,14 @@ import {
 } from 'lucide-react';
 import { t } from '../lib/i18n';
 
+const getDisplayTopic = (art: { topic?: string; portal_category_id?: string }): string => {
+  const val = art.topic || art.portal_category_id;
+  if (!val || val === 'undefined' || val === 'null' || val.trim() === '') {
+    return 'General';
+  }
+  return val.trim();
+};
+
 interface NewsViewProps {
   currentLang: string;
   onSelectArticle: (articleId: string, allIds?: string[]) => void;
@@ -484,8 +492,12 @@ export const NewsView: React.FC<NewsViewProps> = ({
                         onChange={() => toggleSelect(art.article_id)}
                         className="rounded bg-[var(--bg-main)] border-[var(--border)] text-[var(--accent)]"
                       />
-                      <span className="font-bold uppercase px-1.5 py-0.5 rounded bg-[var(--bg-main)] text-[var(--text-primary)] text-[10px]">
-                        {art.source_id}
+                      <span className={`font-bold uppercase px-1.5 py-0.5 rounded text-[10px] ${
+                        art.source_id === 'grouping'
+                          ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
+                          : 'bg-[var(--bg-main)] text-[var(--text-primary)]'
+                      }`}>
+                        {art.source_id === 'grouping' ? 'Grouping · 종합' : art.source_id}
                       </span>
                     </div>
                     <span>{(art.published_at || '').slice(0, 10)}</span>
@@ -505,7 +517,7 @@ export const NewsView: React.FC<NewsViewProps> = ({
 
                 <div className="pt-2 border-t border-[var(--border)] flex items-center justify-between text-[10px] text-[var(--text-secondary)]">
                   <span className="uppercase font-mono">
-                    {art.portal_category_id} &middot; {art.original_language}
+                    {getDisplayTopic(art)} &middot; {art.original_language}
                   </span>
 
                   {art.relatedStoriesCount > 0 && art.story_cluster_id && (
@@ -546,8 +558,12 @@ export const NewsView: React.FC<NewsViewProps> = ({
                         onChange={() => toggleSelect(art.article_id)}
                         className="rounded bg-[var(--bg-main)] border-[var(--border)] text-[var(--accent)]"
                       />
-                      <span className="font-bold px-2 py-0.5 rounded bg-[var(--bg-hover)] text-[var(--text-primary)] uppercase text-[10px]">
-                        {art.source_id}
+                      <span className={`font-bold px-2 py-0.5 rounded uppercase text-[10px] ${
+                        art.source_id === 'grouping'
+                          ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
+                          : 'bg-[var(--bg-hover)] text-[var(--text-primary)]'
+                      }`}>
+                        {art.source_id === 'grouping' ? 'Grouping · 종합' : art.source_id}
                       </span>
                     </div>
                     <span>{(art.published_at || '').slice(0, 10)}</span>
@@ -580,7 +596,7 @@ export const NewsView: React.FC<NewsViewProps> = ({
                 {/* Card Footer */}
                 <div className="pt-2 border-t border-[var(--border)] flex items-center justify-between text-[11px] text-[var(--text-secondary)]">
                   <span className="uppercase font-mono text-[10px]">
-                    {art.portal_category_id}
+                    {getDisplayTopic(art)}
                   </span>
 
                   {art.relatedStoriesCount > 0 && art.story_cluster_id && (
@@ -643,8 +659,12 @@ export const NewsView: React.FC<NewsViewProps> = ({
                 <div className="flex-1 flex flex-col justify-between space-y-2 py-4 sm:py-5 pl-4 sm:pl-0">
                   <div className="space-y-1.5">
                     <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-secondary)]">
-                      <span className="font-bold px-2 py-0.5 rounded bg-[var(--bg-hover)] text-[var(--text-primary)] uppercase">
-                        {art.source_id}
+                      <span className={`font-bold px-2 py-0.5 rounded uppercase text-[10px] ${
+                        art.source_id === 'grouping'
+                          ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
+                          : 'bg-[var(--bg-hover)] text-[var(--text-primary)]'
+                      }`}>
+                        {art.source_id === 'grouping' ? 'Grouping · 종합' : art.source_id}
                       </span>
                       <span className="flex items-center space-x-1">
                         <Calendar className="w-3 h-3" />
@@ -654,7 +674,7 @@ export const NewsView: React.FC<NewsViewProps> = ({
                         {art.original_language}
                       </span>
                       <span className="uppercase text-[10px] font-mono text-[var(--accent)]">
-                        {art.portal_category_id}
+                        {getDisplayTopic(art)}
                       </span>
 
                       {art.relatedStoriesCount > 0 && art.story_cluster_id && (

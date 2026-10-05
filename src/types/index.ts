@@ -43,6 +43,10 @@ export interface Article {
   source_section?: string;
   source_subcategory?: string;
   portal_category_id: string;
+  topic?: string;
+  is_representative?: boolean;
+  grouped_article_ids?: string[];
+  cluster_articles?: any[];
   region?: string;
   lead_image_url?: string;
   image_urls: string[];

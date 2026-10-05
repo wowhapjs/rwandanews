@@ -58,6 +58,9 @@ export interface ArticleRecord {
   source_section?: string;
   source_subcategory?: string;
   portal_category_id: string;
+  topic?: string;
+  is_representative?: boolean;
+  grouped_article_ids?: string[];
   region?: string;
   lead_image_url?: string;
   image_urls: string[];
@@ -86,6 +89,9 @@ export interface StoryClusterRecord {
   title: string;
   representative_article_id: string;
   article_count: number;
+  article_ids?: string[];
+  integrated_body?: string;
+  sources_summary?: string;
   created_at: string;
   updated_at: string;
 }

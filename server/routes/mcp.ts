@@ -13,7 +13,9 @@ import {
 import {
   isSupabaseReady,
   fetchBatchGroupsDirectly,
+  fetchUnprocessedBatchGroupsDirectly,
   fetchGroupArticlesDirectly,
+  fetchUnprocessedGroupArticlesDirectly,
   fetchArticleDetailDirectly,
   saveProcessedArticleDirectly,
   getArticleNumberMap
@@ -60,6 +62,78 @@ export function formatArticleNumber(art: any, dateCounters: Record<string, numbe
 export function countWords(text?: string | null): number {
   if (!text || typeof text !== 'string') return 0;
   return text.trim().split(/\s+/).filter(Boolean).length;
+}
+
+/**
+ * Helper to compute unprocessed 30-item batch groups (raw items only)
+ */
+export function computeUnprocessedBatchGroups(): {
+  groups: any[];
+  totalRaw: number;
+  totalProcessed: number;
+  totalArticles: number;
+} {
+  let allArticles: any[] = [];
+  if (db.sqlite) {
+    try {
+      allArticles = db.sqlite.prepare(`
+        SELECT article_id, published_at, processing_status, source_id, original_title
+        FROM articles
+        WHERE processing_status != 'PROCESSED'
+        ORDER BY published_at DESC
+      `).all() as any[];
+    } catch {
+      allArticles = Object.values(db.core.articles).filter(a => a.processing_status !== 'PROCESSED');
+    }
+  } else {
+    allArticles = Object.values(db.core.articles).filter(a => a.processing_status !== 'PROCESSED');
+  }
+
+  const totalRaw = allArticles.length;
+  const groups: any[] = [];
+  const dateCounters: Record<string, number> = {};
+  const formattedNumbers = new Map<string, string>();
+  for (const art of allArticles) {
+    formattedNumbers.set(art.article_id, formatArticleNumber(art, dateCounters));
+  }
+
+  for (let i = 0; i < allArticles.length; i += BATCH_GROUP_SIZE) {
+    const chunk = allArticles.slice(i, i + BATCH_GROUP_SIZE);
+    const groupNum = Math.floor(i / BATCH_GROUP_SIZE) + 1;
+    const agentNum = ((groupNum - 1) % 5) + 1;
+
+    const sourceSummary: Record<string, number> = {};
+    for (const item of chunk) {
+      const s = item.source_id || 'unknown';
+      sourceSummary[s] = (sourceSummary[s] || 0) + 1;
+    }
+
+    const firstArt = chunk[0];
+    const lastArt = chunk[chunk.length - 1];
+    const startCode = formattedNumbers.get(firstArt?.article_id) || `#${i + 1}`;
+    const endCode = formattedNumbers.get(lastArt?.article_id) || `#${i + chunk.length}`;
+
+    groups.push({
+      group_number: groupNum,
+      agent_number: agentNum,
+      agent_name: `미처리 집중 Agent #${agentNum}`,
+      is_unprocessed_batch: true,
+      start_index: i + 1,
+      end_index: i + chunk.length,
+      start_code: startCode,
+      end_code: endCode,
+      number_range: `${startCode} ~ ${endCode}`,
+      total_items: chunk.length,
+      processed_items: 0,
+      raw_items: chunk.length,
+      status: 'PENDING',
+      first_article_id: firstArt?.article_id || '',
+      last_article_id: lastArt?.article_id || '',
+      source_summary: sourceSummary
+    });
+  }
+
+  return { groups, totalRaw, totalProcessed: 0, totalArticles: totalRaw };
 }
 
 /**
@@ -204,6 +278,15 @@ Supabase 데이터베이스를 직접 조회하고 갱신하여 고품질 3개 �
 - **담당 과제**: 그룹 #${groupNumber} (편성 ID: \`ASSIGN-G${groupNumber}-A${agentNumber}\`)
 - **기사 넘버링 범위**: ${numberRange} (총 ${chunk.length}개 기사)
 - **배정 에이전트**: Agent #${agentNumber} (총 5명 병렬 순환 분배)
+
+---
+
+## ⚠️ [필독] 기사 상태(Status) 및 작업 대상 명시 규칙
+1. **'EXPORTED' 상태는 작업 필수 대상**: 기사 상태 중 \`EXPORTED\`, \`RAW\`, \`PENDING\` 등은 **아직 3개국어 번역/정제 처리가 완료된 것이 아닙니다!** 절대 \`EXPORTED\` 상태를 \`PROCESSED\`(완료)로 오인하여 건너뛰지 마십시오. 이번 과제에 배정된 기사는 모두 반드시 처리해야 하는 대상입니다.
+2. **연속 작업 ('다음' / 'next' 명령어 지원)**:
+   - 사용자가 이번 30개 기사 완료 후 채팅창에 **"다음"** 또는 **"next"**라고만 입력하면:
+   - ChatGPT 당신은 사용자에게 별도로 웹사이트에 가서 다음 프롬프트를 복사해오라고 요구하지 마십시오!
+   - 즉시 연결된 Supabase MCP 도구(\`execute_sql\` 등)를 사용하여, 아직 처리되지 않은 다음 30개 미처리 기사를 DB에서 직접 조회(\`SELECT article_id, original_language, original_title, original_body, portal_category_id, published_at FROM public.articles WHERE processing_status != 'PROCESSED' ORDER BY published_at DESC LIMIT 30\`)하여, 중단 없이 다음 30건의 작업을 연속으로 완수하십시오!
 
 ---
 
@@ -371,7 +454,10 @@ ${articleListText}
 /**
  * Generates prompt for 150-article batch Topic classification (5 groups * 30 items) directly from Supabase
  */
-export async function generateBatchTopicPrompt(batchIndex: number): Promise<{
+export async function generateBatchTopicPrompt(
+  batchIndex: number,
+  options?: { unprocessedOnly?: boolean }
+): Promise<{
   batch_index: number;
   start_group: number;
   end_group: number;
@@ -383,27 +469,61 @@ export async function generateBatchTopicPrompt(batchIndex: number): Promise<{
   const startIndex = (startGroup - 1) * BATCH_GROUP_SIZE;
   const count = 5 * BATCH_GROUP_SIZE; // 150 items
   const client = getSupabaseClient();
+  const isUnprocessedOnly = Boolean(options?.unprocessedOnly);
 
   let chunk150: any[] = [];
   if (client) {
-    const { data, error } = await client
+    let q = client
       .from('articles')
-      .select('article_id, original_language, original_title, original_body, published_at, topic, portal_category_id')
+      .select('article_id, original_language, original_title, original_body, published_at, topic, portal_category_id, processing_status');
+    
+    if (isUnprocessedOnly) {
+      q = q.neq('processing_status', 'PROCESSED');
+    }
+
+    const { data, error } = await q
       .order('published_at', { ascending: false })
       .range(startIndex, startIndex + count - 1);
-    if (data && !error) {
+    if (data && !error && data.length > 0) {
       chunk150 = data;
     }
   }
 
-  // Fallback to local in-memory articles if client not configured
+  // 1. Direct SQLite fallback if Supabase client not ready or returned empty
+  if (chunk150.length === 0 && db.sqlite) {
+    try {
+      const statusClause = isUnprocessedOnly ? "WHERE processing_status != 'PROCESSED'" : "";
+      const rows = db.sqlite.prepare(`
+        SELECT article_id, original_language, original_title, original_body, published_at, topic, portal_category_id, processing_status
+        FROM articles
+        ${statusClause}
+        ORDER BY published_at DESC
+        LIMIT ? OFFSET ?
+      `).all(count, startIndex) as any[];
+      if (rows && rows.length > 0) {
+        chunk150 = rows;
+      }
+    } catch (err: any) {
+      console.warn('[MCP Topic] SQLite direct fallback warning:', err?.message);
+    }
+  }
+
+  // 2. Fallback to local in-memory articles if any
   if (chunk150.length === 0) {
-    const allArticles = Object.values(db.core.articles).sort((a, b) => {
+    let allArticles = Object.values(db.core.articles).sort((a, b) => {
       const da = a.published_at || a.created_at || '';
       const dbTime = b.published_at || b.created_at || '';
       return dbTime.localeCompare(da);
     });
+    if (isUnprocessedOnly) {
+      allArticles = allArticles.filter(a => a.processing_status !== 'PROCESSED');
+    }
     chunk150 = allArticles.slice(startIndex, startIndex + count);
+  }
+
+  // If chunk is still empty, throw clear informative error instead of 0-item prompt
+  if (chunk150.length === 0) {
+    throw new Error(`Batch #${batchIndex} (그룹 #${startGroup}~#${endGroup})에 해당하는 분류 대상 기사가 없습니다. 모든 기사가 이미 처리되었거나 데이터가 비어 있습니다.`);
   }
 
   // Fetch localized Korean titles for these 150 articles to provide richest context
@@ -420,22 +540,36 @@ export async function generateBatchTopicPrompt(batchIndex: number): Promise<{
         if (l.title) koTitleMap.set(l.article_id, l.title.trim());
       }
     }
+  } else if (db.sqlite && articleIds.length > 0) {
+    try {
+      const locRows = db.sqlite.prepare(`
+        SELECT article_id, title FROM localized_articles
+        WHERE lang = 'ko' AND article_id IN (${articleIds.map(() => '?').join(',')})
+      `).all(...articleIds) as Array<{ article_id: string; title: string }>;
+      for (const l of locRows || []) {
+        if (l.title) koTitleMap.set(l.article_id, l.title.trim());
+      }
+    } catch {
+      // ignore
+    }
   }
 
   // Get consistent #YYMMDD-XXX numbering
   const formattedNumbers = await getArticleNumberMap();
 
   const articleRows = chunk150.map((art, idx) => {
-    const artNum = formattedNumbers.get(art.article_id) || `#${startIndex + idx + 1}`;
+    const d = art.published_at ? art.published_at.slice(0, 10).replace(/[^0-9]/g, '') : '260101';
+    const yymmdd = d.length >= 6 ? d.slice(2, 8) : '260101';
+    const artNum = formattedNumbers.get(art.article_id) || `#${yymmdd}-${String((startIndex + idx + 1) % 1000).padStart(3, '0')}`;
     const koTitle = koTitleMap.get(art.article_id);
-    const origTitle = (art.original_title || '').replace(/\r?\n+/g, ' ').trim().slice(0, 120);
+    const origTitle = (art.original_title || '').replace(/\r?\n+/g, ' ').trim().slice(0, 160);
 
     let titleDisplay = origTitle;
     if (koTitle && koTitle !== origTitle) {
       titleDisplay = `${koTitle} (원문: ${origTitle})`;
     }
 
-    const cleanSnippet = (art.original_body || '').replace(/\r?\n+/g, ' ').trim().slice(0, 150);
+    const cleanSnippet = (art.original_body || '').replace(/\r?\n+/g, ' ').trim().slice(0, 180);
     const bodySnippet = cleanSnippet ? ` | 본문: ${cleanSnippet}...` : '';
 
     return `${idx + 1}. [${artNum} · \`${art.article_id}\`] ${titleDisplay}${bodySnippet}`;
@@ -444,34 +578,48 @@ export async function generateBatchTopicPrompt(batchIndex: number): Promise<{
   const prompt = `# ChatGPT 에이전트 지침: 150개 기사 일괄 Topic 고속 재결정 에이전트 (Batch #${batchIndex} · 그룹 #${startGroup}~#${endGroup})
 
 당신은 **뉴스 인텔리전스 150개 기사 일괄 Topic 재결정 전문 고속 에이전트 [Batch Topic Classifier]**입니다.
-총 5개 그룹(그룹 #${startGroup} ~ #${endGroup}, 총 ${chunk150.length}개 기사)의 제목과 핵심 내용을 신속하게 분석하여, 각 기사별 최적의 영문 대분류 Topic을 일괄 결정하고 Supabase DB에 한 번에 업데이트하는 고속 일괄 UPDATE SQL을 생성합니다.
+총 5개 그룹(그룹 #${startGroup} ~ #${endGroup}, 총 ${chunk150.length}개 기사)의 제목과 핵심 내용을 신속하게 분석하여, 각 기사별 최적의 영문 대분류 Topic을 일괄 결정하고 Supabase DB에 한 번에 업데이트하는 고속 일괄 UPDATE SQL을 직접 실행하거나 생성합니다.
 
 ---
 
-## 📌 기사 분석 및 Topic 결정 원칙 (필독)
-1. **언어 무관 종합 분석**: 기사의 원문 언어(영어, 한국어, 키냐르완다어, 프랑스어 등)에 관계없이, 제공된 제목(국문 번역 제목 및 원문 제목)과 본문 요약을 바탕으로 분석하십시오.
-2. **제목 및 본문 내용 종합 참조**: 제목을 기본으로 참고하되, **제목만으로 핵심 분야가 불명확하거나 모호한 경우 반드시 함께 제공된 본문 내용 요약(본문: ...)을 적극 참조**하여 기사의 실질적인 주제를 정확히 파악하십시오.
-3. **표준 9대 영문 Topic 중 반드시 1개 선택**:
-   - **Economy**: 경제, 금융, 은행, 투자, 통상, 무역, 물가, 비즈니스, 기업, 산업 활동
-   - **Politics**: 정치, 국회, 정부 정책, 법률, 외교, 조약, 정상회담, 사법, 안보, 군사
-   - **AI/Tech**: IT, 소프트웨어, 인공지능, 통신, 디지털 혁신, 스타트업, 사이버보안
-   - **Education**: 교육, 학교, 대학, 장학금, 직업 훈련, 학술 연구, R&D
-   - **Sports**: 축구, 농구, 올림픽, 마라톤, 각종 스포츠 경기 및 선수 소식
-   - **Real Estate**: 부동산, 주택, 아파트, 토지, 건설, 인프라, 도시개발
-   - **Volunteers**: 자원봉사, 인도주의적 구호, NGO, 자선, 기부, 사회공헌, 취약계층 지원
-   - **Nature/Living**: 자연, 환경, 기후변화, 국립공원, 야생동물, 농업, 보건의료, 질병, 일상생활
-   - **Culture**: 문화, 예술, 역사, 영화, 음악, 축제, 전통, 관광, 엔터테인먼트
+## ⚠️ [필독] 기사 분석 및 Topic 결정 4대 절대 원칙
+1. **기존 Topic 값 100% 무시 및 신규 지정**:
+   - 현재 DB의 \`topic\` 또는 \`portal_category_id\` 컬럼에 기존 어떤 값(null이든 이전 임의 값)이 들어있든 **모두 100% 무시**하십시오.
+   - 제공된 제목과 본문 내용을 바탕으로 9대 표준 영문 Topic 중 가장 적합한 하나를 완전히 새롭게 지정하십시오!
+2. **EXPORTED 기사는 이번 작업 대상임 (PROCESSED 오인 금지)**:
+   - 기사 상태 중 \`EXPORTED\`, \`RAW\`, \`PENDING\` 등은 **아직 완료된 것이 아니며, 이번 일괄 Topic 분류 작업의 필수 대상**입니다!
+   - 절대 \`EXPORTED\` 상태를 \`PROCESSED\`(완료)로 오인하여 건너뛰지 마십시오.
+3. **언어 무관 / 원문 제목 및 본문 적극 참조**:
+   - 기사의 원문 언어가 영어, 한국어, 키냐르완다어, 프랑스어 등 무엇이든 상관없이, 제공된 제목(국문 번역 제목 및 원문 제목)을 기본 참조하십시오.
+   - **제목만으로 핵심 분야가 불명확하거나 모호한 경우, 반드시 함께 제공된 본문 요약(본문: ...)의 문맥을 적극 참조**하여 기사의 실질적인 주제를 정확히 파악하십시오.
+4. **Supabase DB 직접 실행 및 반영 완료 (단순 SQL 반환 금지)**:
+   - 당신은 Supabase MCP 서버에 연결된 실행 에이전트입니다.
+   - 단순히 SQL 텍스트만 출력하고 멈추지 마십시오! 반드시 제공된 Supabase MCP 도구(\`execute_sql\` 등)를 직접 호출하여 실제 Supabase DB에 150개 기사의 Topic 갱신을 100% 완료하고, 성공적으로 갱신된 행(Rows) 수를 보고하십시오!
+
+---
+
+## 📌 표준 9대 영문 Topic 분류 기준
+- **Economy**: 경제, 금융, 은행, 투자, 통상, 무역, 물가, 비즈니스, 기업, 산업 활동, 세금, 예산
+- **Politics**: 정치, 국회, 정부 정책, 법률, 외교, 조약, 정상회담, 사법, 안보, 군사, 국방
+- **AI/Tech**: IT, 소프트웨어, 인공지능, 통신, 디지털 혁신, 스타트업, 사이버보안, 모바일
+- **Education**: 교육, 학교, 대학, 장학금, 직업 훈련, 학술 연구, R&D, 교사, 시험
+- **Sports**: 축구, 농구, 올림픽, 마라톤, 각종 스포츠 경기 및 선수 소식, 대회
+- **Real Estate**: 부동산, 주택, 아파트, 토지, 건설, 인프라, 도로, 철도, 공항, 도시개발
+- **Volunteers**: 자원봉사, 인도주의적 구호, NGO, 자선, 기부, 사회공헌, 취약계층 지원, 난민
+- **Nature/Living**: 자연, 환경, 기후변화, 국립공원, 야생동물, 농업, 보건의료, 질병, 병원, 일상생활
+- **Culture**: 문화, 예술, 역사, 영화, 음악, 축제, 전통, 관광, 엔터테인먼트, 공연
 
 ---
 
 ## ⚡ 150개 기사 고속 일괄 UPDATE SQL 템플릿
-분석 완료 후, 아래와 같이 PostgreSQL의 고속 일괄 갱신 구문(UPDATE ... FROM VALUES)으로 한 번에 실행 가능한 단일 SQL을 출력하십시오:
+Supabase MCP \`execute_sql\` 도구 호출 시 아래와 같이 단일 쿼리로 단번에 실행하십시오 (topic과 portal_category_id 양쪽 모두 동시 갱신):
 
 \`\`\`sql
 -- [Batch #${batchIndex}] 150개 기사 일괄 Topic 갱신 (그룹 #${startGroup}~#${endGroup})
 UPDATE public.articles AS a
 SET 
   topic = v.topic,
+  portal_category_id = v.topic,
   updated_at = NOW()
 FROM (VALUES
   ('${chunk150[0]?.article_id || 'ART-XXXX1'}', 'Economy'),
@@ -487,7 +635,7 @@ WHERE a.article_id = v.article_id;
 
 ${articleRows}
 
-지금 즉시 위 150개 기사의 내용을 파악하고, 각 기사의 영문 Topic을 결정하여 일괄 UPDATE SQL을 단번에 생성하십시오!`;
+지금 즉시 위 ${chunk150.length}개 기사의 내용을 파악하고, 각 기사의 영문 Topic을 결정하여 Supabase DB에 단번에 반영 완료하십시오!`;
 
   return {
     batch_index: batchIndex,
@@ -503,12 +651,17 @@ ${articleRows}
 // ==========================================
 
 // GET /api/mcp/groups - 30-item grouping status directly from Supabase
-router.get('/groups', async (_req, res) => {
+router.get('/groups', async (req, res) => {
+  const isUnprocessedOnly = req.query.unprocessed === 'true' || req.query.unprocessed_only === 'true';
+
   if (isSupabaseReady()) {
     try {
-      const result = await fetchBatchGroupsDirectly();
+      const result = isUnprocessedOnly
+        ? await fetchUnprocessedBatchGroupsDirectly()
+        : await fetchBatchGroupsDirectly();
       return res.json({
         ...result,
+        is_unprocessed_mode: isUnprocessedOnly,
         supabase_configured: true,
         batch_size: BATCH_GROUP_SIZE
       });
@@ -517,9 +670,35 @@ router.get('/groups', async (_req, res) => {
     }
   }
 
-  const result = computeBatchGroups();
+  const result = isUnprocessedOnly ? computeUnprocessedBatchGroups() : computeBatchGroups();
   res.json({
     ...result,
+    is_unprocessed_mode: isUnprocessedOnly,
+    supabase_configured: isSupabaseReady(),
+    batch_size: BATCH_GROUP_SIZE
+  });
+});
+
+// GET /api/mcp/unprocessed-groups - Dedicated unprocessed 30-item grouping
+router.get('/unprocessed-groups', async (_req, res) => {
+  if (isSupabaseReady()) {
+    try {
+      const result = await fetchUnprocessedBatchGroupsDirectly();
+      return res.json({
+        ...result,
+        is_unprocessed_mode: true,
+        supabase_configured: true,
+        batch_size: BATCH_GROUP_SIZE
+      });
+    } catch (err: any) {
+      console.warn('[MCP unprocessed-groups] Fetch error:', err?.message || err);
+    }
+  }
+
+  const result = computeUnprocessedBatchGroups();
+  res.json({
+    ...result,
+    is_unprocessed_mode: true,
     supabase_configured: isSupabaseReady(),
     batch_size: BATCH_GROUP_SIZE
   });
@@ -528,8 +707,9 @@ router.get('/groups', async (_req, res) => {
 // GET /api/mcp/topic-prompt/:batchIndex - Return 150-article batch Topic classification prompt
 router.get('/topic-prompt/:batchIndex', async (req, res) => {
   const batchIdx = parseInt(req.params.batchIndex, 10) || 1;
+  const isUnprocessedOnly = req.query.unprocessed === 'true' || req.query.unprocessed_only === 'true';
   try {
-    const data = await generateBatchTopicPrompt(batchIdx);
+    const data = await generateBatchTopicPrompt(batchIdx, { unprocessedOnly: isUnprocessedOnly });
     res.json(data);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -543,13 +723,49 @@ router.get('/group/:groupNumber', async (req, res) => {
     return res.status(400).json({ error: '올바른 그룹 번호를 입력해주세요.' });
   }
 
+  const isUnprocessedOnly = req.query.unprocessed === 'true' || req.query.unprocessed_only === 'true';
+
   if (isSupabaseReady()) {
     try {
-      const data = await fetchGroupArticlesDirectly(groupNum);
+      const data = isUnprocessedOnly
+        ? await fetchUnprocessedGroupArticlesDirectly(groupNum)
+        : await fetchGroupArticlesDirectly(groupNum);
       return res.json(data);
     } catch (err: any) {
       console.warn('[MCP group] Direct Supabase fetch fallback to local:', err?.message || err);
     }
+  }
+
+  if (isUnprocessedOnly) {
+    let unprocArts: any[] = [];
+    if (db.sqlite) {
+      try {
+        unprocArts = db.sqlite.prepare(`
+          SELECT * FROM articles WHERE processing_status != 'PROCESSED' ORDER BY published_at DESC
+        `).all() as any[];
+      } catch {
+        unprocArts = Object.values(db.core.articles).filter(a => a.processing_status !== 'PROCESSED');
+      }
+    } else {
+      unprocArts = Object.values(db.core.articles).filter(a => a.processing_status !== 'PROCESSED');
+    }
+
+    const startIndex = (groupNum - 1) * BATCH_GROUP_SIZE;
+    const chunk = unprocArts.slice(startIndex, startIndex + BATCH_GROUP_SIZE);
+    const agentNum = ((groupNum - 1) % 5) + 1;
+
+    return res.json({
+      group_number: groupNum,
+      agent_number: agentNum,
+      agent_name: `미처리 집중 Agent #${agentNum}`,
+      is_unprocessed_batch: true,
+      total_in_group: chunk.length,
+      articles: chunk.map((art, idx) => ({
+        ...art,
+        group_index: idx + 1,
+        article_number: `#UNPROC-${startIndex + idx + 1}`
+      }))
+    });
   }
 
   const allArticles = Object.values(db.core.articles).sort((a, b) => {
@@ -722,14 +938,17 @@ router.post('/save-article', async (req, res) => {
 // GET /api/mcp/prompt/:groupNumber - Return formatted prompt
 router.get('/prompt/:groupNumber', async (req, res) => {
   const groupNum = parseInt(req.params.groupNumber, 10) || 1;
+  const isUnprocessedOnly = req.query.unprocessed === 'true' || req.query.unprocessed_only === 'true';
   const baseUrl = `${req.protocol}://${req.get('host')}`;
 
   let chunk: any[] = [];
-  let numberRange = `Group #${groupNum}`;
+  let numberRange = isUnprocessedOnly ? `미처리 그룹 #${groupNum}` : `Group #${groupNum}`;
 
   if (isSupabaseReady()) {
     try {
-      const gData = await fetchGroupArticlesDirectly(groupNum);
+      const gData = isUnprocessedOnly
+        ? await fetchUnprocessedGroupArticlesDirectly(groupNum)
+        : await fetchGroupArticlesDirectly(groupNum);
       chunk = gData.articles || [];
       numberRange = gData.number_range || numberRange;
     } catch (err: any) {
@@ -737,8 +956,228 @@ router.get('/prompt/:groupNumber', async (req, res) => {
     }
   }
 
+  if (chunk.length === 0 && isUnprocessedOnly) {
+    let unprocArts: any[] = [];
+    if (db.sqlite) {
+      try {
+        unprocArts = db.sqlite.prepare(`
+          SELECT * FROM articles WHERE processing_status != 'PROCESSED' ORDER BY published_at DESC
+        `).all() as any[];
+      } catch {
+        unprocArts = Object.values(db.core.articles).filter(a => a.processing_status !== 'PROCESSED');
+      }
+    } else {
+      unprocArts = Object.values(db.core.articles).filter(a => a.processing_status !== 'PROCESSED');
+    }
+    const startIndex = (groupNum - 1) * BATCH_GROUP_SIZE;
+    chunk = unprocArts.slice(startIndex, startIndex + BATCH_GROUP_SIZE);
+  }
+
   const prompt = generateAgentPrompt(groupNum, baseUrl, chunk, numberRange);
-  res.json({ group_number: groupNum, prompt });
+  res.json({ group_number: groupNum, is_unprocessed: isUnprocessedOnly, prompt });
+});
+
+// POST /api/mcp/cluster-similar-articles - 150-Item Similar Article Detection, Clustering & AI Synthesis
+router.post('/cluster-similar-articles', async (req, res) => {
+  try {
+    const batchIndex = parseInt(req.body.batchIndex, 10) || 1;
+    const isUnprocessedOnly = req.body.unprocessed === 'true' || req.body.unprocessedOnly === true;
+
+    // Fetch the 150 articles for this batch
+    const startGroup = (batchIndex - 1) * 5 + 1;
+    const startIndex = (startGroup - 1) * BATCH_GROUP_SIZE;
+    const count = 5 * BATCH_GROUP_SIZE; // 150 items
+    const client = getSupabaseClient();
+
+    let articles: any[] = [];
+    if (client) {
+      let q = client.from('articles').select('*');
+      if (isUnprocessedOnly) {
+        q = q.neq('processing_status', 'PROCESSED');
+      }
+      const { data } = await q
+        .order('published_at', { ascending: false })
+        .range(startIndex, startIndex + count - 1);
+      if (data && data.length > 0) articles = data;
+    }
+
+    if (articles.length === 0 && db.sqlite) {
+      const statusClause = isUnprocessedOnly ? "WHERE processing_status != 'PROCESSED'" : "";
+      const rows = db.sqlite.prepare(`
+        SELECT * FROM articles
+        ${statusClause}
+        ORDER BY published_at DESC
+        LIMIT ? OFFSET ?
+      `).all(count, startIndex) as any[];
+      if (rows && rows.length > 0) articles = rows;
+    }
+
+    if (articles.length === 0) {
+      let all = Object.values(db.core.articles);
+      if (isUnprocessedOnly) all = all.filter(a => a.processing_status !== 'PROCESSED');
+      articles = all.slice(startIndex, startIndex + count);
+    }
+
+    if (articles.length === 0) {
+      return res.status(400).json({ error: '유사도 검사를 진행할 기사가 없습니다.' });
+    }
+
+    // High-precision similarity analysis
+    // Group identical event/topic articles
+    const clusters: Array<{
+      clusterId: string;
+      title: string;
+      representativeArticleId: string;
+      articleIds: string[];
+      articles: any[];
+      synthesizedArticle: any;
+    }> = [];
+
+    const visited = new Set<string>();
+
+    for (let i = 0; i < articles.length; i++) {
+      const artA = articles[i];
+      if (visited.has(artA.article_id)) continue;
+
+      const groupMatches: any[] = [artA];
+      const titleA = (artA.original_title || '').toLowerCase().replace(/[^a-zA-Z0-9가-힣\s]/g, ' ');
+      const wordsA = new Set(titleA.split(/\s+/).filter((w: string) => w.length >= 3));
+      const timeA = new Date(artA.published_at || artA.created_at || Date.now()).getTime();
+
+      for (let j = i + 1; j < articles.length; j++) {
+        const artB = articles[j];
+        if (visited.has(artB.article_id)) continue;
+
+        const timeB = new Date(artB.published_at || artB.created_at || Date.now()).getTime();
+        const diffHours = Math.abs(timeA - timeB) / (1000 * 60 * 60);
+
+        // Same event/coverage within 5 days (120 hours)
+        if (diffHours <= 120) {
+          const titleB = (artB.original_title || '').toLowerCase().replace(/[^a-zA-Z0-9가-힣\s]/g, ' ');
+          const wordsB = new Set(titleB.split(/\s+/).filter((w: string) => w.length >= 3));
+
+          let commonCount = 0;
+          wordsA.forEach((w: string) => {
+            if (wordsB.has(w)) commonCount++;
+          });
+
+          const minLen = Math.min(wordsA.size, wordsB.size);
+          const ratio = minLen > 0 ? commonCount / minLen : 0;
+
+          // If high overlap (>= 0.40) or at least 3 matching significant keywords
+          if (ratio >= 0.40 || commonCount >= 3) {
+            groupMatches.push(artB);
+          }
+        }
+      }
+
+      // If at least 2 articles cover the exact same event/topic
+      if (groupMatches.length >= 2) {
+        groupMatches.forEach(m => visited.add(m.article_id));
+
+        const clusterId = `CLUSTER-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+        // Pick representative article (longest body or most complete)
+        const sortedByLen = [...groupMatches].sort((a, b) => (b.original_body?.length || 0) - (a.original_body?.length || 0));
+        const rep = sortedByLen[0];
+        const matchIds = groupMatches.map(m => m.article_id);
+        const sourceNames = Array.from(new Set(groupMatches.map(m => m.source_id || 'News'))).join(', ');
+
+        // Synthesize comprehensive AI integrated article combining all facts and details
+        const synthesizedTitle = `[종합] ${rep.original_title}`;
+        const sourceDetails = groupMatches.map((m, idx) => {
+          return `### [원문 ${idx + 1}: ${m.source_id?.toUpperCase() || '언론사'}] ${m.original_title}\n\n${(m.original_body || '').trim()}`;
+        }).join('\n\n---\n\n');
+
+        const synthesizedBody = `> **[AI 종합 인텔리전스 리포트 · Grouping]**\n> 본 기사는 동일한 주제 및 행사를 다룬 ${groupMatches.length}개 언론사(${sourceNames})의 심층 보도를 누락 없이 종합하여 작성된 단일 대표 인텔리전스 기사입니다.\n\n${(rep.original_body || '').trim()}\n\n---\n\n### 📌 종합 언론사별 원문 상세 내역 (${groupMatches.length}건)\n\n${sourceDetails}`;
+
+        clusters.push({
+          clusterId,
+          title: synthesizedTitle,
+          representativeArticleId: rep.article_id,
+          articleIds: matchIds,
+          articles: groupMatches,
+          synthesizedArticle: {
+            ...rep,
+            source_id: 'grouping',
+            is_representative: true,
+            grouped_article_ids: matchIds,
+            story_cluster_id: clusterId,
+            original_title: synthesizedTitle,
+            original_body: synthesizedBody
+          }
+        });
+
+        // 1. Update Supabase if client ready
+        if (client) {
+          try {
+            await client
+              .from('articles')
+              .update({ story_cluster_id: clusterId })
+              .in('article_id', matchIds);
+
+            await client
+              .from('articles')
+              .update({
+                source_id: 'grouping',
+                original_title: synthesizedTitle,
+                original_body: synthesizedBody,
+                story_cluster_id: clusterId
+              })
+              .eq('article_id', rep.article_id);
+
+            await client.from('portal_kv').upsert({
+              collection: 'story_clusters',
+              key: clusterId,
+              value: {
+                id: clusterId,
+                title: synthesizedTitle,
+                representative_article_id: rep.article_id,
+                article_count: groupMatches.length,
+                article_ids: matchIds,
+                sources_summary: sourceNames,
+                created_at: new Date().toISOString()
+              }
+            });
+          } catch (e: any) {
+            console.warn('[MCP Cluster] Supabase upsert error:', e?.message);
+          }
+        }
+
+        // 2. Also update local SQLite if present
+        if (db.sqlite) {
+          try {
+            db.sqlite.prepare(`UPDATE articles SET story_cluster_id = ? WHERE article_id IN (${matchIds.map(() => '?').join(',')})`).run(clusterId, ...matchIds);
+            db.sqlite.prepare(`UPDATE articles SET source_id = 'grouping', original_title = ?, original_body = ? WHERE article_id = ?`).run(synthesizedTitle, synthesizedBody, rep.article_id);
+          } catch (e: any) {
+            console.warn('[MCP Cluster] SQLite update warning:', e?.message);
+          }
+        }
+      }
+    }
+
+    const totalClusteredArticles = clusters.reduce((acc, c) => acc + c.articleIds.length, 0);
+
+    return res.json({
+      success: true,
+      batch_index: batchIndex,
+      scanned_articles_count: articles.length,
+      clusters_created: clusters.length,
+      total_clustered_articles: totalClusteredArticles,
+      clusters: clusters.map(c => ({
+        cluster_id: c.clusterId,
+        title: c.title,
+        representative_id: c.representativeArticleId,
+        article_count: c.articleIds.length,
+        sources: Array.from(new Set(c.articles.map(a => a.source_id)))
+      })),
+      message: clusters.length > 0
+        ? `총 ${articles.length}개 기사 유사도 검사 완료: ${clusters.length}개 묶음 그룹 (${totalClusteredArticles}개 기사)이 하나의 종합 AI 대표 기사로 편성되었습니다.`
+        : `총 ${articles.length}개 기사 유사도 검사 완료: 2건 이상 동일한 행사/주제로 판별된 중복 기사가 없습니다.`
+    });
+  } catch (err: any) {
+    console.error('[MCP Cluster Error]:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // GET /api/mcp/supabase/status - Test Supabase status & DDL

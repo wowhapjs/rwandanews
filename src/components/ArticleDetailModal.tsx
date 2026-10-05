@@ -12,7 +12,9 @@ import {
   Sparkles,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   RefreshCw,
+  Layers,
   Image as ImageIcon
 } from 'lucide-react';
 
@@ -51,6 +53,7 @@ export const ArticleDetailModal: React.FC<ArticleDetailModalProps> = ({
     (currentLang as any) || 'original'
   );
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number>(0);
+  const [expandedSourceArticles, setExpandedSourceArticles] = useState<Record<string, boolean>>({});
   const modalBodyRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -388,8 +391,12 @@ export const ArticleDetailModal: React.FC<ArticleDetailModalProps> = ({
             <>
               {/* Metadata Badges */}
               <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-secondary)]">
-                <span className="px-2.5 py-1 rounded-md bg-[var(--accent)]/15 text-[var(--accent)] font-bold uppercase tracking-wider">
-                  {article?.source_id || 'UNKNOWN'}
+                <span className={`px-2.5 py-1 rounded-md font-bold uppercase tracking-wider ${
+                  article?.source_id === 'grouping'
+                    ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 shadow-xs'
+                    : 'bg-[var(--accent)]/15 text-[var(--accent)]'
+                }`}>
+                  {article?.source_id === 'grouping' ? 'Grouping · 종합 AI 리포트' : (article?.source_id || 'UNKNOWN')}
                 </span>
                 {article?.published_at && (
                   <span className="flex items-center space-x-1 bg-[var(--bg-hover)] px-2.5 py-1 rounded-md">
@@ -403,12 +410,16 @@ export const ArticleDetailModal: React.FC<ArticleDetailModalProps> = ({
                     <span>{article.author}</span>
                   </span>
                 )}
-                {article?.portal_category_id && (
-                  <span className="flex items-center space-x-1 bg-[var(--bg-hover)] px-2.5 py-1 rounded-md">
-                    <Globe className="w-3.5 h-3.5" />
-                    <span className="uppercase">{article.portal_category_id}</span>
-                  </span>
-                )}
+                {(() => {
+                  const raw = article?.topic || article?.portal_category_id;
+                  const displayCat = (raw && raw !== 'undefined' && raw !== 'null' && raw.trim() !== '') ? raw.trim() : 'General';
+                  return (
+                    <span className="flex items-center space-x-1 bg-[var(--bg-hover)] px-2.5 py-1 rounded-md">
+                      <Globe className="w-3.5 h-3.5" />
+                      <span className="uppercase">{displayCat}</span>
+                    </span>
+                  );
+                })()}
                 {article?.region && (
                   <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-semibold text-[11px] uppercase">
                     {article.region}
@@ -593,8 +604,20 @@ export const ArticleDetailModal: React.FC<ArticleDetailModalProps> = ({
                     <p className="text-[var(--text-secondary)]">
                       ChatGPT 다국어 번역 에이전트 작업을 통해 번역이 완료되면 실시간 반영됩니다. 아래에 원문 본문이 표시됩니다.
                     </p>
-                    <div className="pt-2 text-sm text-[var(--text-primary)]/90 border-t border-amber-500/20 whitespace-pre-line leading-relaxed font-normal">
-                      {article.original_body}
+                    <div className="pt-2 text-sm text-[var(--text-primary)]/90 border-t border-amber-500/20 leading-relaxed font-normal">
+                      <Markdown
+                        components={{
+                          h1: ({ children }) => <h3 className="text-lg font-bold text-[var(--text-primary)] pt-3 pb-1 border-b border-[var(--border)]/40">{children}</h3>,
+                          h2: ({ children }) => <h3 className="text-base font-bold text-[var(--text-primary)] pt-3 pb-1">{children}</h3>,
+                          h3: ({ children }) => <h4 className="text-sm font-bold text-[var(--text-primary)] pt-2 pb-0.5">{children}</h4>,
+                          p: ({ children }) => <p className="mb-3 leading-relaxed whitespace-pre-line">{children}</p>,
+                          strong: ({ children }) => <strong className="font-bold text-[var(--text-primary)]">{children}</strong>,
+                          blockquote: ({ children }) => <blockquote className="pl-4 py-1.5 border-l-3 border-[var(--accent)] italic text-[var(--text-secondary)] my-3 bg-[var(--bg-hover)]/40 rounded-r-lg">{children}</blockquote>,
+                          a: ({ href, children }) => <a href={href} target="_blank" rel="noreferrer" className="text-[var(--accent)] underline inline-flex items-center gap-0.5">{children} <ExternalLink className="w-3 h-3 inline" /></a>
+                        }}
+                      >
+                        {article.original_body}
+                      </Markdown>
                     </div>
                   </div>
                 ) : (
@@ -608,7 +631,7 @@ export const ArticleDetailModal: React.FC<ArticleDetailModalProps> = ({
                         p: ({ children }) => <p className="mb-3 leading-relaxed whitespace-pre-line">{children}</p>,
                         strong: ({ children }) => <strong className="font-bold text-[var(--text-primary)]">{children}</strong>,
                         blockquote: ({ children }) => <blockquote className="pl-4 py-1.5 border-l-3 border-[var(--accent)] italic text-[var(--text-secondary)] my-3 bg-[var(--bg-hover)]/40 rounded-r-lg">{children}</blockquote>,
-                        a: ({ href, children }) => <a href={href} target="_blank" rel="noreferrer" className="text-[var(--accent)] underline">{children}</a>
+                        a: ({ href, children }) => <a href={href} target="_blank" rel="noreferrer" className="text-[var(--accent)] underline inline-flex items-center gap-0.5">{children} <ExternalLink className="w-3 h-3 inline" /></a>
                       }}
                     >
                       {currentLocalized?.body || article.original_body}
@@ -822,6 +845,109 @@ export const ArticleDetailModal: React.FC<ArticleDetailModalProps> = ({
                         )}
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Request 7: 묶음 기사 원문 목록 (말미에 몰아 넣고 숨김 toggle하여 제목만 보여줌, toggle 클릭시 전문 보기 가능) */}
+              {Boolean((data?.cluster_articles && data.cluster_articles.length > 0) || (article?.cluster_articles && article.cluster_articles.length > 0)) && (
+                <div className="p-4 sm:p-5 rounded-2xl bg-[var(--bg-main)] border border-indigo-500/30 space-y-4">
+                  <div className="flex items-center justify-between border-b border-[var(--border)] pb-2.5">
+                    <div className="flex items-center space-x-2">
+                      <span className="p-1 rounded-md bg-indigo-500/20 text-indigo-400">
+                        <Layers className="w-4 h-4" />
+                      </span>
+                      <h4 className="text-xs sm:text-sm font-bold text-[var(--text-primary)]">
+                        📦 묶음 기사 원문 목록 (총 {(data?.cluster_articles || article?.cluster_articles || []).length}개 언론사 원문)
+                      </h4>
+                    </div>
+                    <span className="text-[11px] text-[var(--text-secondary)]">
+                      클릭시 각 언론사 원문 전문 펼침/접기
+                    </span>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    {(data?.cluster_articles || article?.cluster_articles || []).map((subArt: any, idx: number) => {
+                      const isExpanded = Boolean(expandedSourceArticles[subArt.article_id]);
+                      return (
+                        <div
+                          key={subArt.article_id || idx}
+                          className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] overflow-hidden transition-all shadow-xs"
+                        >
+                          {/* Header: Toggle Title */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setExpandedSourceArticles(prev => ({
+                                ...prev,
+                                [subArt.article_id]: !prev[subArt.article_id]
+                              }));
+                            }}
+                            className="w-full p-3.5 flex items-center justify-between gap-3 text-left hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
+                          >
+                            <div className="flex items-center space-x-2.5 flex-1 min-w-0">
+                              <span className="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-[var(--bg-main)] border border-[var(--border)] text-[var(--accent)]">
+                                {subArt.source_id || 'News'}
+                              </span>
+                              <span className="text-xs sm:text-sm font-semibold text-[var(--text-primary)] truncate">
+                                {subArt.original_title}
+                              </span>
+                            </div>
+                            <div className="flex items-center space-x-2 shrink-0">
+                              <span className="text-[11px] text-[var(--text-secondary)] hidden sm:inline">
+                                {(subArt.published_at || '').slice(0, 10)}
+                              </span>
+                              <span className="text-xs font-semibold px-2 py-1 rounded bg-[var(--bg-main)] border border-[var(--border)] text-[var(--accent)] hover:text-white flex items-center space-x-1">
+                                <span>{isExpanded ? '원문 접기' : '전문 보기'}</span>
+                                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                              </span>
+                            </div>
+                          </button>
+
+                          {/* Expanded Full Text Body */}
+                          {isExpanded && (
+                            <div className="p-4 border-t border-[var(--border)] bg-[var(--bg-main)]/60 space-y-3 animate-in fade-in duration-150">
+                              <div className="flex flex-wrap items-center justify-between text-xs text-[var(--text-secondary)] pb-2 border-b border-[var(--border)]/40">
+                                <div className="flex items-center space-x-3">
+                                  {subArt.author && <span>기자: {subArt.author}</span>}
+                                  <span>작성일시: {(subArt.published_at || '').replace('T', ' ').slice(0, 19)}</span>
+                                </div>
+                                {subArt.source_url && (
+                                  <a
+                                    href={subArt.source_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-[var(--accent)] hover:underline flex items-center space-x-1 text-[11px]"
+                                  >
+                                    <span>언론사 기사 원문 링크</span>
+                                    <ExternalLink className="w-3 h-3" />
+                                  </a>
+                                )}
+                              </div>
+
+                              <div className="text-xs sm:text-sm text-[var(--text-primary)]/90 leading-relaxed space-y-2">
+                                <Markdown
+                                  components={{
+                                    p: ({ children }) => <p className="mb-2 leading-relaxed">{children}</p>,
+                                    h1: ({ children }) => <h3 className="text-base font-bold text-[var(--text-primary)] pt-2">{children}</h3>,
+                                    h2: ({ children }) => <h4 className="text-sm font-bold text-[var(--text-primary)] pt-1.5">{children}</h4>,
+                                    h3: ({ children }) => <h5 className="text-xs font-bold text-[var(--text-primary)] pt-1">{children}</h5>,
+                                    strong: ({ children }) => <strong className="font-bold text-[var(--text-primary)]">{children}</strong>,
+                                    a: ({ href, children }) => (
+                                      <a href={href} target="_blank" rel="noreferrer" className="text-[var(--accent)] underline inline-flex items-center gap-0.5">
+                                        {children} <ExternalLink className="w-3 h-3 inline" />
+                                      </a>
+                                    )
+                                  }}
+                                >
+                                  {subArt.original_body || ''}
+                                </Markdown>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}

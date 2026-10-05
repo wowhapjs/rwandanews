@@ -24,6 +24,8 @@ import { t } from '../lib/i18n';
 interface BatchGroupInfo {
   group_number: number;
   agent_number: number;
+  agent_name?: string;
+  is_unprocessed_batch?: boolean;
   start_index: number;
   end_index: number;
   start_code: string;
@@ -65,35 +67,36 @@ interface GroupArticle {
   original_word_count?: number;
 }
 
-function getAgentBadge(agentNum: number) {
+function getAgentBadge(agentNum: number, isUnproc?: boolean) {
+  const prefix = isUnproc ? '미처리 Agent #' : 'Agent #';
   switch (agentNum) {
     case 1:
       return {
         bg: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
         dot: 'bg-emerald-400',
         border: 'border-emerald-500/40',
-        name: 'Agent #1'
+        name: `${prefix}1`
       };
     case 2:
       return {
         bg: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
         dot: 'bg-blue-400',
         border: 'border-blue-500/40',
-        name: 'Agent #2'
+        name: `${prefix}2`
       };
     case 3:
       return {
         bg: 'bg-purple-500/15 text-purple-300 border-purple-500/30',
         dot: 'bg-purple-400',
         border: 'border-purple-500/40',
-        name: 'Agent #3'
+        name: `${prefix}3`
       };
     case 4:
       return {
         bg: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
         dot: 'bg-amber-400',
         border: 'border-amber-500/40',
-        name: 'Agent #4'
+        name: `${prefix}4`
       };
     case 5:
     default:
@@ -101,7 +104,7 @@ function getAgentBadge(agentNum: number) {
         bg: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
         dot: 'bg-rose-400',
         border: 'border-rose-500/40',
-        name: 'Agent #5'
+        name: `${prefix}5`
       };
   }
 }
@@ -135,15 +138,21 @@ export const SupabaseMcpWorkspace: React.FC<SupabaseMcpWorkspaceProps> = ({ curr
   const [hoveredArticlePreview, setHoveredArticlePreview] = useState<string | null>(null);
   const [detailFilter, setDetailFilter] = useState<'ALL' | 'RAW' | 'PROCESSED'>('ALL');
 
-  const loadGroups = async () => {
+  const [clusteringBatch, setClusteringBatch] = useState<number | null>(null);
+
+  const loadGroups = async (filterMode: 'ALL' | 'UNPROCESSED' | 'DONE' = groupFilter) => {
     setLoading(true);
     try {
-      const res = await fetch('/api/mcp/groups');
+      const url = filterMode === 'UNPROCESSED' ? '/api/mcp/groups?unprocessed=true' : '/api/mcp/groups';
+      const res = await fetch(url);
       const data = await res.json();
       setGroups(data.groups || []);
       setTotalRaw(data.totalRaw || 0);
       setTotalProcessed(data.totalProcessed || 0);
       setTotalArticles(data.totalArticles || 0);
+      if (data.groups && data.groups.length > 0) {
+        setSelectedGroupNumber(data.groups[0].group_number);
+      }
     } catch (err) {
       console.error('Failed to load batch groups:', err);
     } finally {
@@ -161,10 +170,11 @@ export const SupabaseMcpWorkspace: React.FC<SupabaseMcpWorkspaceProps> = ({ curr
     }
   };
 
-  const loadGroupArticles = async (groupNum: number) => {
+  const loadGroupArticles = async (groupNum: number, isUnprocessed: boolean = groupFilter === 'UNPROCESSED') => {
     setArticlesLoading(true);
     try {
-      const res = await fetch(`/api/mcp/group/${groupNum}`);
+      const url = isUnprocessed ? `/api/mcp/group/${groupNum}?unprocessed=true` : `/api/mcp/group/${groupNum}`;
+      const res = await fetch(url);
       const data = await res.json();
       setSelectedGroupArticles(data.articles || []);
     } catch (err) {
@@ -181,13 +191,14 @@ export const SupabaseMcpWorkspace: React.FC<SupabaseMcpWorkspaceProps> = ({ curr
 
   useEffect(() => {
     if (selectedGroupNumber) {
-      loadGroupArticles(selectedGroupNumber);
+      loadGroupArticles(selectedGroupNumber, groupFilter === 'UNPROCESSED');
     }
-  }, [selectedGroupNumber]);
+  }, [selectedGroupNumber, groupFilter]);
 
   const handleCopyPrompt = async (groupNum: number) => {
     try {
-      const res = await fetch(`/api/mcp/prompt/${groupNum}`);
+      const url = groupFilter === 'UNPROCESSED' ? `/api/mcp/prompt/${groupNum}?unprocessed=true` : `/api/mcp/prompt/${groupNum}`;
+      const res = await fetch(url);
       const data = await res.json();
       await navigator.clipboard.writeText(data.prompt);
       setCopiedPromptGroup(groupNum);
@@ -199,13 +210,47 @@ export const SupabaseMcpWorkspace: React.FC<SupabaseMcpWorkspaceProps> = ({ curr
 
   const handleCopyTopicPrompt = async (batchIdx: number) => {
     try {
-      const res = await fetch(`/api/mcp/topic-prompt/${batchIdx}`);
+      const url = groupFilter === 'UNPROCESSED'
+        ? `/api/mcp/topic-prompt/${batchIdx}?unprocessed=true`
+        : `/api/mcp/topic-prompt/${batchIdx}`;
+      const res = await fetch(url);
       const data = await res.json();
+      if (!data.prompt) {
+        alert('토픽 재결정 프롬프트를 생성할 기사가 없습니다.');
+        return;
+      }
       await navigator.clipboard.writeText(data.prompt);
       setCopiedTopicBatch(batchIdx);
       setTimeout(() => setCopiedTopicBatch(null), 3000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to copy 150-item topic prompt:', err);
+      alert(`프롬프트 복사 실패: ${err.message}`);
+    }
+  };
+
+  const handleClusterSimilarArticles = async (batchIdx: number) => {
+    setClusteringBatch(batchIdx);
+    try {
+      const res = await fetch('/api/mcp/cluster-similar-articles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          batchIndex: batchIdx,
+          unprocessed: groupFilter === 'UNPROCESSED'
+        })
+      });
+      const data = await res.json();
+      if (!data.success) {
+        alert(`유사도 검사 실패: ${data.error || '오류 발생'}`);
+        return;
+      }
+      alert(data.message);
+      await loadGroups(groupFilter);
+      if (selectedGroupNumber) await loadGroupArticles(selectedGroupNumber, groupFilter === 'UNPROCESSED');
+    } catch (err: any) {
+      alert(`유사도 검사 요청 오류: ${err.message}`);
+    } finally {
+      setClusteringBatch(null);
     }
   };
 
@@ -328,7 +373,7 @@ DO UPDATE SET
   const completedGroupsCount = groups.filter(g => g.status === 'DONE').length;
 
   const filteredGroups = groups.filter(g => {
-    if (groupFilter === 'UNPROCESSED') return g.raw_items > 0;
+    if (groupFilter === 'UNPROCESSED') return true; // when in UNPROCESSED mode, groups are already 100% raw
     if (groupFilter === 'DONE') return g.status === 'DONE';
     return true;
   });
@@ -515,43 +560,52 @@ DO UPDATE SET
           <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
             <div className="flex items-center space-x-1.5 p-1 bg-[var(--bg-main)] border border-[var(--border)] rounded-xl text-xs">
               <button
-                onClick={() => setGroupFilter('ALL')}
-                className={`px-3 py-1 rounded-lg font-semibold transition-all ${
+                onClick={async () => {
+                  setGroupFilter('ALL');
+                  await loadGroups('ALL');
+                }}
+                className={`px-3 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
                   groupFilter === 'ALL'
                     ? 'bg-[var(--accent)] text-white shadow-sm'
                     : 'text-[var(--text-secondary)] hover:text-white'
                 }`}
               >
-                {t('filter_all', currentLang)} ({groups.length})
+                {t('filter_all', currentLang)} ({totalArticles})
               </button>
               <button
-                onClick={() => setGroupFilter('UNPROCESSED')}
-                className={`px-3 py-1 rounded-lg font-semibold transition-all ${
+                onClick={async () => {
+                  setGroupFilter('UNPROCESSED');
+                  await loadGroups('UNPROCESSED');
+                }}
+                className={`px-3 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
                   groupFilter === 'UNPROCESSED'
                     ? 'bg-amber-600 text-white shadow-sm'
                     : 'text-[var(--text-secondary)] hover:text-white'
                 }`}
               >
-                {t('filter_all', currentLang) === 'All' ? 'Pending' : '미처리/진행중'} ({unprocessedGroupsCount})
+                미처리 집중배정 ({totalRaw}건)
               </button>
               <button
-                onClick={() => setGroupFilter('DONE')}
-                className={`px-3 py-1 rounded-lg font-semibold transition-all ${
+                onClick={async () => {
+                  setGroupFilter('DONE');
+                  await loadGroups('DONE');
+                }}
+                className={`px-3 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
                   groupFilter === 'DONE'
                     ? 'bg-emerald-600 text-white shadow-sm'
                     : 'text-[var(--text-secondary)] hover:text-white'
                 }`}
               >
-                {t('status_done', currentLang)} ({completedGroupsCount})
+                {t('status_done', currentLang)} ({totalProcessed}건)
               </button>
             </div>
 
             {/* Refresh & Re-partition Button */}
             <button
               onClick={async () => {
-                await loadGroups();
+                await loadGroups(groupFilter);
                 await loadSupabaseStatus();
-                if (selectedGroupNumber) await loadGroupArticles(selectedGroupNumber);
+                if (selectedGroupNumber) await loadGroupArticles(selectedGroupNumber, groupFilter === 'UNPROCESSED');
               }}
               disabled={loading}
               className="px-3 py-1.5 rounded-xl bg-[var(--bg-main)] border border-[var(--border)] hover:border-emerald-500 text-xs font-semibold text-[var(--text-primary)] hover:text-emerald-400 flex items-center space-x-1.5 transition-all shadow-sm cursor-pointer"
@@ -562,6 +616,21 @@ DO UPDATE SET
             </button>
           </div>
         </div>
+
+        {/* Unprocessed Mode Notice Banner */}
+        {groupFilter === 'UNPROCESSED' && (
+          <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-200 flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+              <span>
+                <strong>[미처리 전담 에이전트 30개 단위 집중 배정 모드]</strong> 기존 담당 그룹과 무관하게, 아직 처리되지 않은 순수 미처리 기사만을 30개씩 새롭게 모아 독립 에이전트(#1~#5)에게 분배했습니다.
+              </span>
+            </div>
+            <span className="font-mono text-[11px] bg-amber-500/20 px-2 py-0.5 rounded font-bold">
+              총 {totalRaw}건 미처리
+            </span>
+          </div>
+        )}
 
         <div className="overflow-x-auto border border-[var(--border)] rounded-xl">
           <table className="w-full text-left text-xs">
@@ -597,8 +666,9 @@ DO UPDATE SET
 
                   // 150-article batch calculation: 1 button per 5 rows
                   const isBatchStart = idx % 5 === 0;
-                  const batchIndex = Math.floor((grp.group_number - 1) / 5) + 1;
+                  const batchIndex = Math.floor(idx / 5) + 1;
                   const batchSpan = Math.min(5, filteredGroups.length - idx);
+                  const endRowInBatch = filteredGroups[idx + batchSpan - 1];
 
                   return (
                     <tr
@@ -764,18 +834,20 @@ DO UPDATE SET
                           className="p-3 text-center border-l border-[var(--border)] align-middle bg-[var(--bg-main)]/40"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <div className="flex flex-col items-center justify-center space-y-1.5 p-2 rounded-xl border border-purple-500/30 bg-purple-500/10">
+                          <div className="flex flex-col items-center justify-center space-y-2 p-2.5 rounded-xl border border-purple-500/30 bg-purple-500/10 min-w-[130px]">
                             <div className="flex items-center space-x-1 text-purple-300 font-bold text-[11px]">
                               <Tag className="w-3.5 h-3.5" />
-                              <span>150개 Topic</span>
+                              <span>150개 Batch #{batchIndex}</span>
                             </div>
                             <div className="text-[10px] text-[var(--text-secondary)] font-mono">
-                              그룹 #{grp.group_number}~#{Math.min(grp.group_number + 4, groups.length)}
+                              그룹 #{grp.group_number}~#{endRowInBatch?.group_number || grp.group_number}
                             </div>
+                            
+                            {/* 1) 150-Item Topic Prompt Copy */}
                             <button
                               type="button"
                               onClick={() => handleCopyTopicPrompt(batchIndex)}
-                              className="px-2.5 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-[10px] inline-flex items-center space-x-1 shadow-sm transition-all"
+                              className="w-full px-2 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-[10px] inline-flex items-center justify-center space-x-1 shadow-sm transition-all cursor-pointer"
                               title={t('btn_150_topic_tooltip', currentLang)}
                             >
                               {copiedTopicBatch === batchIndex ? (
@@ -784,6 +856,27 @@ DO UPDATE SET
                                 <Copy className="w-3 h-3 text-white" />
                               )}
                               <span>{copiedTopicBatch === batchIndex ? t('btn_copied', currentLang) : t('btn_150_topic_prompt', currentLang)}</span>
+                            </button>
+
+                            {/* 2) Request 7: 묶음기사 유사검사 버튼 */}
+                            <button
+                              type="button"
+                              onClick={() => handleClusterSimilarArticles(batchIndex)}
+                              disabled={clusteringBatch === batchIndex}
+                              className="w-full px-2 py-1.5 rounded-lg bg-indigo-600/80 hover:bg-indigo-600 text-white font-bold text-[10px] inline-flex items-center justify-center space-x-1 shadow-sm transition-all border border-indigo-400/30 cursor-pointer disabled:opacity-50"
+                              title="이 150개 기사 중 동일 주제/행사 유사 기사를 검사하여 묶음 그룹으로 종합 AI 대표 기사를 생성합니다."
+                            >
+                              {clusteringBatch === batchIndex ? (
+                                <>
+                                  <RefreshCw className="w-3 h-3 animate-spin text-white" />
+                                  <span>검사 중...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Layers className="w-3 h-3 text-white" />
+                                  <span>묶음기사 유사검사</span>
+                                </>
+                              )}
                             </button>
                           </div>
                         </td>

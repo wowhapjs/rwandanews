@@ -182,8 +182,15 @@ export async function fetchArticlesDirectly(
 
     const mapped = rows.map((art: any) => {
       const loc = locMap.get(art.article_id);
+      const rawTopic = (art.topic && art.topic !== 'undefined' && art.topic !== 'null') ? String(art.topic).trim() : null;
+      const rawCat = (art.portal_category_id && art.portal_category_id !== 'undefined' && art.portal_category_id !== 'null') ? String(art.portal_category_id).trim() : null;
+      const normalizedCategory = rawTopic || rawCat || 'General';
+      const relatedCount = art.story_cluster_id ? (art.source_id === 'grouping' ? (art.grouped_article_ids?.length || 2) : 2) : 0;
       return {
         ...art,
+        topic: normalizedCategory,
+        portal_category_id: normalizedCategory,
+        relatedStoriesCount: relatedCount,
         displayTitle: loc?.title || art.original_title,
         displaySubtitle: loc?.subtitle || art.original_subtitle,
         displaySummary: loc?.summary || (art.original_subtitle || art.original_body?.slice(0, 180) + '...'),
@@ -195,13 +202,22 @@ export async function fetchArticlesDirectly(
   }
 
   // Original display
-  const mapped = rows.map((art: any) => ({
-    ...art,
-    displayTitle: art.original_title,
-    displaySubtitle: art.original_subtitle,
-    displaySummary: art.original_subtitle || art.original_body?.slice(0, 180) + '...',
-    isLocalized: art.processing_status === 'PROCESSED'
-  }));
+  const mapped = rows.map((art: any) => {
+    const rawTopic = (art.topic && art.topic !== 'undefined' && art.topic !== 'null') ? String(art.topic).trim() : null;
+    const rawCat = (art.portal_category_id && art.portal_category_id !== 'undefined' && art.portal_category_id !== 'null') ? String(art.portal_category_id).trim() : null;
+    const normalizedCategory = rawTopic || rawCat || 'General';
+    const relatedCount = art.story_cluster_id ? (art.source_id === 'grouping' ? (art.grouped_article_ids?.length || 2) : 2) : 0;
+    return {
+      ...art,
+      topic: normalizedCategory,
+      portal_category_id: normalizedCategory,
+      relatedStoriesCount: relatedCount,
+      displayTitle: art.original_title,
+      displaySubtitle: art.original_subtitle,
+      displaySummary: art.original_subtitle || art.original_body?.slice(0, 180) + '...',
+      isLocalized: art.processing_status === 'PROCESSED'
+    };
+  });
 
   return { total, articles: mapped, limit, offset };
 }
@@ -221,6 +237,11 @@ export async function fetchArticleDetailDirectly(articleId: string): Promise<any
 
   if (error || !art) return null;
 
+  // Normalize topic / portal_category_id
+  const cat = art.topic || art.portal_category_id || 'General';
+  art.topic = cat;
+  art.portal_category_id = cat;
+
   // Fetch localized versions
   const { data: locList } = await client
     .from('localized_articles')
@@ -239,11 +260,27 @@ export async function fetchArticleDetailDirectly(articleId: string): Promise<any
     }
   }
 
+  // Fetch clustered sibling original articles if this article is in a story cluster
+  let cluster_articles: any[] = [];
+  if (art.story_cluster_id) {
+    const { data: siblings } = await client
+      .from('articles')
+      .select('article_id, original_title, original_subtitle, original_body, source_id, source_url, author, published_at, lead_image_url')
+      .eq('story_cluster_id', art.story_cluster_id)
+      .neq('article_id', articleId)
+      .order('published_at', { ascending: false });
+
+    if (siblings) {
+      cluster_articles = siblings;
+    }
+  }
+
   return {
     ...art,
     ko,
     en,
-    rw
+    rw,
+    cluster_articles
   };
 }
 
@@ -256,7 +293,7 @@ let articleNumberMapCache: {
  * Returns a consistent map of article_id -> #YYMMDD-XXX based on chronological publication order
  */
 export async function getArticleNumberMap(): Promise<Map<string, string>> {
-  if (articleNumberMapCache && Date.now() - articleNumberMapCache.timestamp < 60000) {
+  if (articleNumberMapCache && Date.now() - articleNumberMapCache.timestamp < 600000) {
     return articleNumberMapCache.map;
   }
 
@@ -410,6 +447,129 @@ export async function fetchBatchGroupsDirectly(): Promise<{
   }
 
   return { groups, totalRaw, totalProcessed, totalArticles };
+}
+
+/**
+ * Direct computation of 30-item unprocessed batch groups (dedicated separate agent assignment for raw items only)
+ */
+export async function fetchUnprocessedBatchGroupsDirectly(): Promise<{
+  groups: any[];
+  totalRaw: number;
+  totalProcessed: number;
+  totalArticles: number;
+}> {
+  const client = getSupabaseClient();
+  if (!client) {
+    return { groups: [], totalRaw: 0, totalProcessed: 0, totalArticles: 0 };
+  }
+
+  // 1. Get raw / unprocessed articles (EXPORTED, RAW, PENDING etc)
+  const { data: rawArticles, error } = await client
+    .from('articles')
+    .select('article_id, published_at, processing_status, source_id, original_title')
+    .neq('processing_status', 'PROCESSED')
+    .order('published_at', { ascending: false });
+
+  if (error || !rawArticles) {
+    console.warn('[SupabaseStore] fetchUnprocessedBatchGroups error:', error?.message);
+    return { groups: [], totalRaw: 0, totalProcessed: 0, totalArticles: 0 };
+  }
+
+  const totalRaw = rawArticles.length;
+  const formattedNumbers = await getArticleNumberMap();
+  const BATCH_GROUP_SIZE = 30;
+  const groups: any[] = [];
+
+  for (let i = 0; i < rawArticles.length; i += BATCH_GROUP_SIZE) {
+    const chunk = rawArticles.slice(i, i + BATCH_GROUP_SIZE);
+    const groupNum = Math.floor(i / BATCH_GROUP_SIZE) + 1;
+    const agentNum = ((groupNum - 1) % 5) + 1;
+
+    const sourceSummary: Record<string, number> = {};
+    for (const item of chunk) {
+      const s = item.source_id || 'unknown';
+      sourceSummary[s] = (sourceSummary[s] || 0) + 1;
+    }
+
+    const firstArt = chunk[0];
+    const lastArt = chunk[chunk.length - 1];
+    const startCode = formattedNumbers.get(firstArt?.article_id) || `#${i + 1}`;
+    const endCode = formattedNumbers.get(lastArt?.article_id) || `#${i + chunk.length}`;
+
+    groups.push({
+      group_number: groupNum,
+      agent_number: agentNum,
+      agent_name: `미처리 집중 Agent #${agentNum}`,
+      is_unprocessed_batch: true,
+      start_index: i + 1,
+      end_index: i + chunk.length,
+      start_code: startCode,
+      end_code: endCode,
+      number_range: `${startCode} ~ ${endCode}`,
+      total_items: chunk.length,
+      processed_items: 0,
+      raw_items: chunk.length,
+      status: 'PENDING',
+      first_article_id: firstArt?.article_id || '',
+      last_article_id: lastArt?.article_id || '',
+      source_summary: sourceSummary,
+      article_ids: chunk.map(a => a.article_id)
+    });
+  }
+
+  return {
+    groups,
+    totalRaw,
+    totalProcessed: 0,
+    totalArticles: totalRaw
+  };
+}
+
+/**
+ * Direct fetch of 30 unprocessed articles in a dedicated unprocessed group
+ */
+export async function fetchUnprocessedGroupArticlesDirectly(groupNumber: number): Promise<any> {
+  const client = getSupabaseClient();
+  if (!client) throw new Error('Supabase is not configured.');
+
+  const BATCH_GROUP_SIZE = 30;
+  const startIndex = (groupNumber - 1) * BATCH_GROUP_SIZE;
+  const endIndex = startIndex + BATCH_GROUP_SIZE - 1;
+
+  const { data: chunk, error } = await client
+    .from('articles')
+    .select('*')
+    .neq('processing_status', 'PROCESSED')
+    .order('published_at', { ascending: false })
+    .range(startIndex, endIndex);
+
+  if (error) {
+    throw new Error(`Supabase query error: ${error.message}`);
+  }
+
+  const articles = chunk || [];
+  const agentNum = ((groupNumber - 1) % 5) + 1;
+  const numberMap = await getArticleNumberMap();
+
+  const articlesWithIndex = articles.map((art: any, idx: number) => {
+    const artNumber = numberMap.get(art.article_id) || `#${startIndex + idx + 1}`;
+    return {
+      ...art,
+      topic: art.topic || art.portal_category_id || 'General',
+      portal_category_id: art.portal_category_id || art.topic || 'General',
+      group_index: idx + 1,
+      article_number: artNumber
+    };
+  });
+
+  return {
+    group_number: groupNumber,
+    agent_number: agentNum,
+    agent_name: `미처리 집중 Agent #${agentNum}`,
+    is_unprocessed_batch: true,
+    total_in_group: articlesWithIndex.length,
+    articles: articlesWithIndex
+  };
 }
 
 /**

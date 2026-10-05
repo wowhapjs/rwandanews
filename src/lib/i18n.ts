@@ -237,6 +237,12 @@ export const translations = {
     en: 'Copy 150-article batch Topic fast classification prompt (5 groups)',
     rw: 'Koporora ibisabwa byo gushyira Topic ku makuru 150 (Amatsinda 5)'
   },
+  btn_cluster_similar: { ko: '묶음기사 유사검사', en: 'Cluster Similar Articles', rw: 'Guhuza Amakuru Asa' },
+  btn_cluster_similar_tooltip: {
+    ko: '150개 기사 중 동일 행사/주제의 기사를 AI 유사도 검사하여 하나의 그룹으로 묶고 종합 AI 대표 기사를 생성합니다.',
+    en: 'Inspect title/date similarity across 150 articles, group identical stories into a cluster, and synthesize a comprehensive AI article.',
+    rw: 'Suzuma amakuru 150 ahuye, uyahuze mu itsinda rimwe kandi uhange inkuru ihuriweho na AI.'
+  },
 
   detail_table_title: {
     ko: '담당 기사 상세 목록',
