@@ -1,9 +1,8 @@
 import { Router } from 'express';
 import { db } from '../db/database.js';
-import { getSupabaseConfig, getSupabaseClient, generateSupabaseDDL, saveProcessedArticleToSupabase, testSupabaseConnection, syncAssignmentsToSupabase, syncArticlesChunkToSupabase, syncAllMissingArticlesToSupabase } from '../db/supabase.js';
-import { isSupabaseReady, fetchBatchGroupsDirectly, fetchUnprocessedBatchGroupsDirectly, fetchGroupArticlesDirectly, fetchUnprocessedGroupArticlesDirectly, fetchArticleDetailDirectly, saveProcessedArticleDirectly, getArticleNumberMap } from '../db/supabaseStore.js';
+import { getSupabaseConfig, generateSupabaseDDL, testSupabaseConnection } from '../db/supabase.js';
+import { isSupabaseReady, fetchBatchGroupsDirectly, fetchGroupArticlesDirectly, fetchArticleDetailDirectly, saveProcessedArticleDirectly } from '../db/supabaseStore.js';
 const router = Router();
-const BATCH_GROUP_SIZE=30;
 router.post('/cluster-similar-articles', (_req,res)=>res.status(410).json({error:'Legacy heuristic clustering is disabled. Use /api/story-agent/batch and validate the agent result before any cluster changes.'}));
 router.get('/supabase/status',async(_req,res)=>{const config=getSupabaseConfig();const test=await testSupabaseConnection();res.json({config:{configured:config.configured,url:config.url?`${config.url.slice(0,18)}...`:''},test,ddl:generateSupabaseDDL()});});
 router.post('/sync-articles',async(_req,res)=>{try{const test=await testSupabaseConnection();res.json({success:true,count:test.articleCount||0,message:`현재 ${test.articleCount||0}개의 기사가 Supabase를 직접 참조하고 있습니다.`});}catch(err:any){res.status(500).json({success:false,error:err.message});}});
