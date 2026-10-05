@@ -12,16 +12,15 @@ import tagsRouter from './server/routes/tags.js';
 import settingsRouter from './server/routes/settings.js';
 import facebookSessionRouter from './server/routes/facebookSession.js';
 import mcpRouter from './server/routes/mcp.js';
+import storyAgentRouter from './server/routes/storyAgent.js';
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT || 3000);
 
-  // Global middlewares
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-  // Seed initial data & check if Supabase is primary
   try {
     seedInitialData();
     await db.initDatabase();
@@ -29,11 +28,11 @@ async function startServer() {
     console.error('Error during initial seed/init:', err);
   }
 
-  // API Routes FIRST
   app.use('/api/articles', articlesRouter);
   app.use('/api/events', eventsRouter);
   app.use('/api/sources', sourcesRouter);
   app.use('/api/ai', aiWorkspaceRouter);
+  app.use('/api/story-agent', storyAgentRouter);
   app.use('/api/tags', tagsRouter);
   app.use('/api/settings', settingsRouter);
   app.use('/api/facebook-session', facebookSessionRouter);
@@ -43,19 +42,13 @@ async function startServer() {
     res.json({ status: 'ok', service: 'personal-news-intelligence-portal' });
   });
 
-  // Vite middleware for development vs static serve for production
   if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
+    const vite = await createViteServer({ server: { middlewareMode: true }, appType: 'spa' });
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
+    app.get('*', (req, res) => { res.sendFile(path.join(distPath, 'index.html')); });
   }
 
   app.listen(PORT, '0.0.0.0', () => {
