@@ -4,6 +4,7 @@ import { canUseMode } from '../src/auth/roles';
 import { assertArticleTransition, canTransitionArticle } from '../server/services/articleWorkflow';
 import { buildClusterRecoveryPlan, buildRestoreMap } from '../server/services/storyRecovery';
 import { buildStoryAgentCommand, parseStoryAgentResult } from '../server/services/storyAgentProtocol';
+import { validateArticleImageUpload } from '../server/services/imageUploadPolicy';
 
 test('role presentation modes never grant admin mode to reporter', () => {
   assert.equal(canUseMode('ADMIN', 'reader'), true);
@@ -33,4 +34,10 @@ test('story agent result is batch-bound and rejects unknown articles', () => {
   const result = parseStoryAgentResult(JSON.stringify({ protocolVersion: 1, batchId: 'batch-1', assignments: [{ articleId: 'a1', clusterKey: 'event-1', confidence: 0.8 }] }), 'batch-1', new Set(['a1']));
   assert.equal(result.assignments[0].clusterKey, 'event-1');
   assert.throws(() => parseStoryAgentResult(JSON.stringify({ protocolVersion: 1, batchId: 'batch-1', assignments: [{ articleId: 'other', clusterKey: null }] }), 'batch-1', new Set(['a1'])));
+});
+
+test('image policy rejects unsupported or oversized files', () => {
+  assert.doesNotThrow(() => validateArticleImageUpload({ mimetype: 'image/webp', size: 1024, originalname: 'news.webp' }));
+  assert.throws(() => validateArticleImageUpload({ mimetype: 'image/svg+xml', size: 1024, originalname: 'x.svg' }));
+  assert.throws(() => validateArticleImageUpload({ mimetype: 'image/jpeg', size: 11 * 1024 * 1024, originalname: 'huge.jpg' }));
 });
