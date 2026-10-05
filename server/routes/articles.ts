@@ -1,1 +1,42 @@
-import{Router}from'express';import{db}from'../db/database.js';import{isSupabaseReady,fetchArticlesDirectly,fetchArticleDetailDirectly}from'../db/supabaseStore.js';const router=Router();function localArticles(){if(db.sqlite){return(db.sqlite.prepare('SELECT raw_record FROM articles ORDER BY published_at DESC').all()as any[]).map(r=>{try{return JSON.parse(r.raw_record)}catch{return null}}).filter(Boolean);}return Object.values(db.core.articles);}router.get('/',async(req,res)=>{const q=req.query as any,limit=Math.max(1,Math.min(Number(q.limit||50),200)),offset=Math.max(0,Number(q.offset||0)),search=String(q.search||'').trim().toLowerCase(),sort=String(q.sort||'newest');if(isSupabaseReady()){try{return res.json(await fetchArticlesDirectly({...q,limit,offset,search,sort,lang:q.lang||'original'}));}catch(err:any){console.warn('[Articles API] Supabase fallback:',err?.message||err);}}let all:any[]=localArticles();if(search)all=all.filter(a=>String(a.original_title||'').toLowerCase().includes(search)||String(a.original_body||'').toLowerCase().includes(search));all.sort((a,b)=>{const x=new Date(a.published_at||a.collected_at||0).getTime(),y=new Date(b.published_at||b.collected_at||0).getTime();return sort==='oldest'?x-y:y-x;});const total=all.length,articles=all.slice(offset,offset+limit).map(a=>({...a,displayTitle:a.original_title,displaySubtitle:a.original_subtitle,displaySummary:a.original_subtitle||String(a.original_body||'').slice(0,180),isLocalized:false,relatedStoriesCount:a.story_cluster_id?2:0,relatedEvents:[],tags:[]}));res.json({total,articles,limit,offset});});router.post('/group-similar',(_req,res)=>res.status(410).json({success:false,error:'Heuristic grouping is disabled. Use the AI Agent Story Clustering workflow in AI Workspace.'}));router.get('/:id',async(req,res)=>{if(isSupabaseReady()){try{const detail=await fetchArticleDetailDirectly(req.params.id);if(detail)return res.json({article:detail,localized:{ko:detail.ko,en:detail.en,rw:detail.rw},ko:detail.ko,en:detail.en,rw:detail.rw,similarArticles:[],previousArticles:[],futureArticles:[]});}catch{}}let art:any=db.core.articles[req.params.id];if(!art&&db.sqlite){const row=db.sqlite.prepare('SELECT raw_record FROM articles WHERE article_id=?').get(req.params.id)as any;if(row?.raw_record)try{art=JSON.parse(row.raw_record)}catch{}}if(!art)return res.status(404).json({error:'Article not found'});res.json({article:art,localized:{},similarArticles:[],previousArticles:[],futureArticles:[]});});export default router;
+import { Router } from 'express';
+import { fetchArticlesDirectly, fetchArticleDetailDirectly } from '../db/supabaseStore.js';
+
+const router = Router();
+
+router.get('/', async (req, res) => {
+  try {
+    const q = req.query as any;
+    const limit = Math.max(1, Math.min(Number(q.limit || 30), 100));
+    const offset = Math.max(0, Number(q.offset || 0));
+    const list = (value: unknown) => String(value || '').split(',').map(v => v.trim()).filter(Boolean);
+    const result = await fetchArticlesDirectly({
+      ...q,
+      limit,
+      offset,
+      search: String(q.search || '').trim(),
+      sort: String(q.sort || 'newest'),
+      lang: String(q.lang || 'original'),
+      categories: list(q.categories), regions: list(q.regions), aiStatus: list(q.aiStatus),
+      sources: list(q.sources), languages: list(q.languages), tags: list(q.tags),
+      excludeCategories: list(q.excludeCategories), excludeRegions: list(q.excludeRegions),
+      excludeSources: list(q.excludeSources), excludeLanguages: list(q.excludeLanguages), excludeTags: list(q.excludeTags),
+    });
+    res.json(result);
+  } catch (error) {
+    res.status(503).json({ error: error instanceof Error ? error.message : 'Supabase article service unavailable', source: 'supabase' });
+  }
+});
+
+router.post('/group-similar', (_req, res) => res.status(410).json({ success:false, error:'Heuristic grouping is disabled. Use the AI Agent Story Clustering workflow.' }));
+
+router.get('/:id', async (req, res) => {
+  try {
+    const detail = await fetchArticleDetailDirectly(req.params.id);
+    if (!detail) return res.status(404).json({ error:'Article not found in Supabase' });
+    return res.json({ article:detail, localized:{ko:detail.ko,en:detail.en,rw:detail.rw}, ko:detail.ko, en:detail.en, rw:detail.rw, similarArticles:detail.cluster_articles || [] });
+  } catch (error) {
+    return res.status(503).json({ error:error instanceof Error ? error.message : 'Supabase article service unavailable', source:'supabase' });
+  }
+});
+
+export default router;
