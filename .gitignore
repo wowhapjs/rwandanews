@@ -13,3 +13,5 @@ cookies.txt
 data/cookies.txt
 data/*.cookies
 *.cookies
+*.db-wal
+*.db-shm
