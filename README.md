@@ -1,36 +1,33 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# JSRD News / Newsroom v2
 
-# Run and deploy your AI Studio app
+Rwanda-focused news collection and newsroom application with three presentation modes: Reader, Reporter, and Admin.
 
-This contains everything you need to run your app locally.
+## Development
 
-View your app in AI Studio: https://ai.studio/apps/f9102a85-e712-4e02-bf28-011f26182996
+1. Install dependencies with `npm install`.
+2. Configure server data/API values in `.env.local` as needed.
+3. For browser login/signup, set `VITE_SUPABASE_URL` and the public `VITE_SUPABASE_ANON_KEY`. Never expose a Supabase service-role key to the browser.
+4. Run `npm run lint`, `npm test`, and `npm run build` before deployment.
+5. Run `npm run dev` for local development.
 
-## Run Locally
+Reader mode remains available without authentication. Reporter/Admin modes are permission-gated when browser Supabase Auth is configured.
 
-**Prerequisites:**  Node.js
+## Crawler Protocol v2
 
+All registered legacy source adapters are exposed through the v2 compatibility layer. The target pipeline is `DISCOVER → FETCH → PARSE → NORMALIZE → VALIDATE → DEDUP → STORE → POST-PROCESS`. `/api/sources/protocol-health` exposes protocol and last-run diagnostics. New sources should implement the source adapter contract, add parser fixtures/tests, register once, and pass protocol validation before being enabled.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Story clustering
+
+Legacy title/date heuristic cluster writes are disabled. AI Workspace creates a batch of up to 150 unclustered articles, generates a copy/paste Agent command, and validates returned JSON before any database mutation. Cluster recovery is designed as preview-first and bounded to 150 associations; destructive application is intentionally not automatic.
+
+## Reporter workflow
+
+Reporter Desk supports drafts, review submission, Markdown edit/split/preview, toolbar helpers, and JPEG/PNG/WebP/AVIF image uploads up to 10 MB. Drafts are scoped by reporter ID in the application workflow.
+
+## Production policy
+
+GitHub `main` is source of truth. Production is never the development workspace. Verify in an isolated staging workspace, then deploy an exact full SHA with the platform `site-deploy` runner and verify local/public health plus Manager deployment state.
 
 ## Facebook browser session
 
-Facebook collection reuses an authenticated Playwright browser state instead
-of signing in for every crawl.
-
-1. Set a long random `FACEBOOK_ADMIN_TOKEN` in the server environment.
-2. Open **Settings → Facebook Browser Session** in the portal.
-3. Enter the administrator token and Facebook credentials.
-4. Complete a two-factor code or approve the login on a trusted device.
-5. After the status becomes **Connected**, run the Facebook source crawler.
-
-The generated state is stored at `data/facebook-auth-state.json` by default,
-is ignored by Git, and must be treated like a password. CAPTCHA is deliberately
-not automated. On hosts with ephemeral filesystems, use **Copy session for AI
-Studio Secret** and save the copied value as `FACEBOOK_STORAGE_STATE_BASE64`.
+Facebook collection reuses an authenticated Playwright browser state. The generated state under `data/facebook-auth-state.json` is ignored by Git and must be treated like a password. CAPTCHA is deliberately not automated.
