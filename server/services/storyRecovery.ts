@@ -1,36 +1,8 @@
 export const DEFAULT_RECOVERY_LIMIT = 150;
-
-export interface ClusterAssociationSnapshot {
-  articleId: string;
-  clusterId: string;
-  changedAt?: string;
-}
-
-export interface ClusterRecoveryPlan {
-  operation: 'UNLINK_RECENT_ASSOCIATIONS';
-  limit: number;
-  associations: ClusterAssociationSnapshot[];
-  createdAt: string;
-}
-
-export function buildClusterRecoveryPlan(associations: ClusterAssociationSnapshot[], limit = DEFAULT_RECOVERY_LIMIT): ClusterRecoveryPlan {
-  if (!Number.isInteger(limit) || limit < 1 || limit > DEFAULT_RECOVERY_LIMIT) throw new Error(`Recovery limit must be between 1 and ${DEFAULT_RECOVERY_LIMIT}`);
-  const selected = associations.filter(item => item.articleId && item.clusterId).slice(0, limit);
-  return { operation: 'UNLINK_RECENT_ASSOCIATIONS', limit, associations: selected, createdAt: new Date().toISOString() };
-}
-
-export function assertRecoveryPlan(plan: ClusterRecoveryPlan): void {
-  if (plan.operation !== 'UNLINK_RECENT_ASSOCIATIONS') throw new Error('Unsupported recovery operation');
-  if (plan.associations.length > DEFAULT_RECOVERY_LIMIT) throw new Error('Recovery plan exceeds maximum association count');
-  const ids = new Set<string>();
-  for (const item of plan.associations) {
-    if (!item.articleId || !item.clusterId) throw new Error('Recovery snapshot is incomplete');
-    if (ids.has(item.articleId)) throw new Error(`Duplicate article in recovery plan: ${item.articleId}`);
-    ids.add(item.articleId);
-  }
-}
-
-export function buildRestoreMap(plan: ClusterRecoveryPlan): Map<string, string> {
-  assertRecoveryPlan(plan);
-  return new Map(plan.associations.map(item => [item.articleId, item.clusterId]));
-}
+export interface ClusterAssociationSnapshot { articleId: string; clusterId: string; changedAt?: string; }
+export interface ClusterRecoveryPlan { operation: 'UNLINK_RECENT_ASSOCIATIONS'; limit: number; associations: ClusterAssociationSnapshot[]; createdAt: string; }
+export function buildClusterRecoveryPlan(associations: ClusterAssociationSnapshot[], limit = DEFAULT_RECOVERY_LIMIT): ClusterRecoveryPlan { if (!Number.isInteger(limit) || limit < 1 || limit > DEFAULT_RECOVERY_LIMIT) throw new Error(`Recovery limit must be between 1 and ${DEFAULT_RECOVERY_LIMIT}`); const selected = associations.filter(item => item.articleId && item.clusterId).slice(0, limit); return { operation: 'UNLINK_RECENT_ASSOCIATIONS', limit, associations: selected, createdAt: new Date().toISOString() }; }
+export function assertRecoveryPlan(plan: ClusterRecoveryPlan): void { if (plan.operation !== 'UNLINK_RECENT_ASSOCIATIONS') throw new Error('Unsupported recovery operation'); if (plan.associations.length > DEFAULT_RECOVERY_LIMIT) throw new Error('Recovery plan exceeds maximum association count'); const ids = new Set<string>(); for (const item of plan.associations) { if (!item.articleId || !item.clusterId) throw new Error('Recovery snapshot is incomplete'); if (ids.has(item.articleId)) throw new Error(`Duplicate article in recovery plan: ${item.articleId}`); ids.add(item.articleId); } }
+export function buildRestoreMap(plan: ClusterRecoveryPlan): Map<string, string> { assertRecoveryPlan(plan); return new Map(plan.associations.map(item => [item.articleId, item.clusterId])); }
+export function collectRecentClusterAssociations(core: { articles: Record<string, { article_id: string; story_cluster_id?: string; collected_at?: string; published_at?: string }> }, limit = DEFAULT_RECOVERY_LIMIT): ClusterAssociationSnapshot[] { return Object.values(core.articles).filter(a => !!a.story_cluster_id).sort((a,b) => new Date(b.collected_at || b.published_at || 0).getTime() - new Date(a.collected_at || a.published_at || 0).getTime()).slice(0, limit).map(a => ({ articleId: a.article_id, clusterId: a.story_cluster_id! })); }
+export function applyClusterUnlink(core: { articles: Record<string, any>; storyClusterArticles: Record<string,string[]>; storyClusters: Record<string,any> }, plan: ClusterRecoveryPlan): void { assertRecoveryPlan(plan); for (const { articleId, clusterId } of plan.associations) { if (core.articles[articleId]?.story_cluster_id === clusterId) delete core.articles[articleId].story_cluster_id; core.storyClusterArticles[clusterId] = (core.storyClusterArticles[clusterId] || []).filter(id => id !== articleId); if (core.storyClusters[clusterId]) core.storyClusters[clusterId].article_count = core.storyClusterArticles[clusterId].length; } }
