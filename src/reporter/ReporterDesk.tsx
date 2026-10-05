@@ -1,0 +1,8 @@
+import React from 'react';
+
+export interface ReporterArticleSummary { id: string; title: string; state: 'DRAFT' | 'IN_REVIEW' | 'PUBLISHED' | 'ARCHIVED'; updatedAt?: string; }
+
+export function ReporterDesk({ articles, onCreate, onOpen }: { articles: ReporterArticleSummary[]; onCreate: () => void; onOpen: (id: string) => void }) {
+  const count = (state: ReporterArticleSummary['state']) => articles.filter(a => a.state === state).length;
+  return <main className="mx-auto max-w-5xl space-y-5 p-4 sm:p-6"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-semibold text-slate-500">NEWSROOM</p><h1 className="text-2xl font-black">Reporter Desk</h1></div><button type="button" onClick={onCreate} className="min-h-11 rounded-xl bg-slate-900 px-4 font-semibold text-white">+ 기사 작성</button></div><div className="grid grid-cols-3 gap-2 text-center"><div className="rounded-xl border p-3"><strong className="block text-xl">{count('DRAFT')}</strong><span className="text-xs">Draft</span></div><div className="rounded-xl border p-3"><strong className="block text-xl">{count('IN_REVIEW')}</strong><span className="text-xs">Review</span></div><div className="rounded-xl border p-3"><strong className="block text-xl">{count('PUBLISHED')}</strong><span className="text-xs">Published</span></div></div><section className="divide-y rounded-xl border">{articles.map(article => <button key={article.id} type="button" onClick={() => onOpen(article.id)} className="flex min-h-16 w-full items-center justify-between gap-3 p-4 text-left"><span className="font-semibold">{article.title || '제목 없는 기사'}</span><span className="shrink-0 text-xs font-semibold text-slate-500">{article.state}</span></button>)}</section></main>;
+}
