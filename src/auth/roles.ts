@@ -1,32 +1,8 @@
-export type AccountRole = 'READER' | 'REPORTER' | 'ADMIN';
+export type AccountRole = 'MEMBER' | 'EDITOR' | 'ADMIN';
 export type AppMode = 'reader' | 'reporter' | 'admin';
-
-export interface UserProfile {
-  id: string;
-  email?: string;
-  displayName?: string;
-  role: AccountRole;
-  canPublishDirectly?: boolean;
-}
-
-const allowedModes: Record<AccountRole, AppMode[]> = {
-  READER: ['reader'],
-  REPORTER: ['reader', 'reporter'],
-  ADMIN: ['reader', 'reporter', 'admin'],
-};
-
-export function canUseMode(role: AccountRole, mode: AppMode): boolean {
-  return allowedModes[role].includes(mode);
-}
-
-export function defaultModeFor(role: AccountRole): AppMode {
-  return role === 'ADMIN' ? 'admin' : role === 'REPORTER' ? 'reporter' : 'reader';
-}
-
-export function canWriteArticles(role: AccountRole): boolean {
-  return role === 'REPORTER' || role === 'ADMIN';
-}
-
-export function canManageNewsroom(role: AccountRole): boolean {
-  return role === 'ADMIN';
-}
+export interface UserProfile { id:string; email?:string; displayName?:string; avatarUrl?:string; role:AccountRole; provider?:string; status?:'ACTIVE'|'SUSPENDED'; }
+const allowedModes:Record<AccountRole,AppMode[]>={MEMBER:['reader'],EDITOR:['reader','reporter'],ADMIN:['reader','reporter','admin']};
+export const canUseMode=(role:AccountRole,mode:AppMode)=>allowedModes[role].includes(mode);
+export const defaultModeFor=(role:AccountRole):AppMode=>role==='ADMIN'?'admin':role==='EDITOR'?'reporter':'reader';
+export const canWriteArticles=(role:AccountRole)=>role==='EDITOR'||role==='ADMIN';
+export const canManageNewsroom=(role:AccountRole)=>role==='ADMIN';
