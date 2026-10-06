@@ -1,53 +1,10 @@
 import { Router } from 'express';
-import { db } from '../db/database.js';
-
-const router = Router();
-
-// GET /api/settings
-router.get('/', (req, res) => {
-  res.json({ settings: db.core.settings });
-});
-
-// POST /api/settings - Update settings
-router.post('/', (req, res) => {
-  const updates = req.body;
-  if (!updates || typeof updates !== 'object') {
-    return res.status(400).json({ error: 'Invalid settings body' });
-  }
-
-  db.core.settings = {
-    ...db.core.settings,
-    ...updates
-  };
-  db.save();
-  res.json({ success: true, settings: db.core.settings });
-});
-
-// Saved Views endpoints
-router.get('/saved-views', (req, res) => {
-  const views = Object.values(db.core.savedEventViews);
-  res.json({ views });
-});
-
-router.post('/saved-views', (req, res) => {
-  const { name, filterState } = req.body;
-  if (!name) return res.status(400).json({ error: 'View name is required' });
-
-  const id = `VIEW-${Date.now().toString(36)}`;
-  db.core.savedEventViews[id] = {
-    id,
-    name,
-    filter_state: filterState || {},
-    created_at: new Date().toISOString()
-  };
-  db.save();
-  res.json({ success: true, view: db.core.savedEventViews[id] });
-});
-
-router.delete('/saved-views/:id', (req, res) => {
-  delete db.core.savedEventViews[req.params.id];
-  db.save();
-  res.json({ success: true });
-});
-
+import { getSettings, listPortalValues, putPortalValue, removePortalValue, updateSettings } from '../db/portalStore.js';
+const router=Router();
+const defaults=()=>({defaultLanguage:'original',portalTheme:'BLACK',defaultNewsViewMode:'PHOTO_TEXT',defaultEventListViewMode:'CARD',articleBatchTarget:20,articleBatchMax:25,articleCharLimit:300000,eventBatchTarget:20,eventBatchMax:30,eventCharLimit:250000,crawlerIntervalMinutes:60,eventAutoMergeThreshold:.95,eventReviewThreshold:.70,defaultTimezone:'Africa/Kigali'});
+router.get('/',async(_req,res)=>{try{res.json({settings:{...defaults(),...(await getSettings())}});}catch(e){res.status(503).json({error:e instanceof Error?e.message:'Supabase unavailable'});}});
+router.post('/',async(req,res)=>{try{if(!req.body||typeof req.body!=='object')return res.status(400).json({error:'Invalid settings body'});const settings=await updateSettings({...defaults(),...req.body});res.json({success:true,settings});}catch(e){res.status(503).json({error:e instanceof Error?e.message:'Supabase unavailable'});}});
+router.get('/saved-views',async(_req,res)=>{try{res.json({views:Object.values(await listPortalValues<any>('savedEventViews'))});}catch(e){res.status(503).json({error:e instanceof Error?e.message:'Supabase unavailable'});}});
+router.post('/saved-views',async(req,res)=>{try{const{name,filterState}=req.body;if(!name)return res.status(400).json({error:'View name is required'});const id=`VIEW-${Date.now().toString(36)}`,view={id,name,filter_state:filterState||{},created_at:new Date().toISOString()};await putPortalValue('savedEventViews',id,view);res.json({success:true,view});}catch(e){res.status(503).json({error:e instanceof Error?e.message:'Supabase unavailable'});}});
+router.delete('/saved-views/:id',async(req,res)=>{try{await removePortalValue('savedEventViews',req.params.id);res.json({success:true});}catch(e){res.status(503).json({error:e instanceof Error?e.message:'Supabase unavailable'});}});
 export default router;
