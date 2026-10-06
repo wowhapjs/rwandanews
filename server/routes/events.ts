@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { eventService } from '../services/events.js';
 import { eventInboxService } from '../services/eventInbox.js';
-import { excelService } from '../services/excel.js';
+import { excelService } from '../services/directExcel.js';
 import { fetchArticlesByIdsDirectly } from '../db/supabaseStore.js';
 import { listPortalValues } from '../db/portalStore.js';
 const router=Router();
