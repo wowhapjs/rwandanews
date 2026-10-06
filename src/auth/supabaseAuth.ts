@@ -1,19 +1,7 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import type { UserProfile } from './roles';
-
-let client: SupabaseClient | null = null;
-export function getBrowserSupabase(): SupabaseClient {
-  if (client) return client;
-  const url = import.meta.env.VITE_SUPABASE_URL; const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-  if (!url || !anonKey) throw new Error('Supabase authentication is not configured');
-  client = createClient(url, anonKey, { auth: { persistSession: true, autoRefreshToken: true } }); return client;
-}
-export async function signInWithEmail(email: string, password: string) { const { error } = await getBrowserSupabase().auth.signInWithPassword({ email, password }); if (error) throw error; }
-export async function signUpWithEmail(email: string, password: string) { const { error } = await getBrowserSupabase().auth.signUp({ email, password }); if (error) throw error; }
-export async function signOut() { const { error } = await getBrowserSupabase().auth.signOut(); if (error) throw error; }
-export async function loadCurrentProfile(): Promise<UserProfile | null> {
-  const supabase = getBrowserSupabase(); const { data: { user }, error } = await supabase.auth.getUser(); if (error || !user) return null;
-  const { data } = await supabase.from('newsroom_profiles').select('user_id,display_name,role,can_publish_directly').eq('user_id', user.id).maybeSingle();
-  const role = data?.role === 'ADMIN' ? 'ADMIN' : data?.role === 'REPORTER' ? 'REPORTER' : 'READER';
-  return { id: user.id, email: user.email, displayName: data?.display_name ?? undefined, role, canPublishDirectly: data?.can_publish_directly === true || data?.can_publish_directly === 1 };
-}
+import{createClient,SupabaseClient}from'@supabase/supabase-js';import type{UserProfile}from'./roles';let client:SupabaseClient|null=null;
+export function getBrowserSupabase(){if(client)return client;const runtime=(window as any).__JSRD_SUPABASE__||{},url=runtime.url||import.meta.env.VITE_SUPABASE_URL,anonKey=runtime.key||import.meta.env.VITE_SUPABASE_ANON_KEY;if(!url||!anonKey)throw new Error('Supabase authentication is not configured');client=createClient(url,anonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});return client}
+export async function signInWithEmail(email:string,password:string){const{error}=await getBrowserSupabase().auth.signInWithPassword({email,password});if(error)throw error}
+export async function signUpWithEmail(email:string,password:string){const{error}=await getBrowserSupabase().auth.signUp({email,password,options:{data:{role:'MEMBER'}}});if(error)throw error}
+export async function signInWithGoogle(){const runtime=(window as any).__JSRD_SUPABASE__||{},url=runtime.url||import.meta.env.VITE_SUPABASE_URL,key=runtime.key||import.meta.env.VITE_SUPABASE_ANON_KEY;if(url&&key){const settings=await fetch(`${url}/auth/v1/settings`,{headers:{apikey:key}}).then(r=>r.ok?r.json():null).catch(()=>null);if(settings&&settings.external?.google!==true)throw new Error('Google 로그인은 OAuth 제공자 설정이 완료된 뒤 사용할 수 있습니다.')}const{error}=await getBrowserSupabase().auth.signInWithOAuth({provider:'google',options:{redirectTo:location.origin+location.pathname}});if(error)throw error}
+export async function signOut(){const{error}=await getBrowserSupabase().auth.signOut();if(error)throw error}
+export async function loadCurrentProfile():Promise<UserProfile|null>{const s=getBrowserSupabase(),{data:{session}}=await s.auth.getSession();if(!session)return null;const r=await fetch('/api/account/me',{headers:{Authorization:`Bearer ${session.access_token}`}});if(r.status===401)return null;if(!r.ok)throw new Error((await r.json().catch(()=>({}))).error||'회원정보를 불러오지 못했습니다.');return(await r.json()).profile as UserProfile}
