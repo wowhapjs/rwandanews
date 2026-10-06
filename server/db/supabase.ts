@@ -13,7 +13,11 @@ export function getSupabaseConfig():SupabaseConfig {
 export function getSupabaseClient():SupabaseClient|null {
   const c=getSupabaseConfig(); if(!c.configured)return null;
   const k=`${c.url}::${c.key}`; if(cachedClient&&cachedConfigKey===k)return cachedClient;
-  cachedClient=createClient(c.url,c.key,{auth:{persistSession:false}}); cachedConfigKey=k; return cachedClient;
+  cachedClient=createClient(c.url,c.key,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}}); cachedConfigKey=k; return cachedClient;
+}
+export function getSupabaseAuthClient():SupabaseClient|null {
+  const c=getSupabaseConfig(); if(!c.configured)return null;
+  return createClient(c.url,c.key,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
 }
 export async function testSupabaseConnection(){
   const client=getSupabaseClient(); if(!client)return{success:false,message:'Supabase URL/Key is not configured',tablesExist:false};
