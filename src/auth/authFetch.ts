@@ -1,2 +1,1 @@
-import{getBrowserSupabase}from'./supabaseAuth';
-export async function authFetch(input:RequestInfo|URL,init:RequestInit={}){const{data:{session}}=await getBrowserSupabase().auth.getSession();const headers=new Headers(init.headers||{});if(session?.access_token)headers.set('Authorization',`Bearer ${session.access_token}`);return fetch(input,{...init,headers})}
+export async function authFetch(input:RequestInfo|URL,init:RequestInit={}){let r=await fetch(input,{...init,credentials:'same-origin'});if(r.status===401){const refreshed=await fetch('/api/auth/refresh',{method:'POST',credentials:'same-origin'});if(refreshed.ok)r=await fetch(input,{...init,credentials:'same-origin'})}return r}
