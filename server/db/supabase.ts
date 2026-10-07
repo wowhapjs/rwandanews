@@ -18,7 +18,7 @@ export function getSupabasePublicConfig():SupabaseConfig {
   const key=process.env.SUPABASE_PUBLISHABLE_KEY?.trim()||process.env.SUPABASE_ANON_KEY?.trim()||process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()||process.env.SUPABASE_KEY?.trim()||'';
   return {url,key,configured:Boolean(url&&key)};
 }
-export function bindSupabaseRequestToken(token:string){requestAccessToken.enterWith(token)}
+export function runWithSupabaseRequestToken<T>(token:string|undefined,fn:()=>T):T{return requestAccessToken.run(token||'',fn)}
 export function getSupabaseClient():SupabaseClient|null {
   const token=requestAccessToken.getStore();
   if(token){
