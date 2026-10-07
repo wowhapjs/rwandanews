@@ -20,14 +20,14 @@ import { SettingsView } from './views/SettingsView';
 
 interface AppProps { initialTab?: ActiveTab; embedded?: boolean; controlledTab?: ActiveTab; onActiveTabChange?: (tab: ActiveTab) => void; }
 export default function App({ initialTab='HOME', embedded=false, controlledTab, onActiveTabChange }: AppProps = {}) {
-  const [activeTab, setActiveTab] = useState<ActiveTab>(initialTab);
+  const [internalTab, setInternalTab] = useState<ActiveTab>(initialTab);
+  const activeTab = controlledTab ?? internalTab;
+  const setActiveTab = (tab: ActiveTab) => { if (controlledTab === undefined) setInternalTab(tab); onActiveTabChange?.(tab); };
   const [theme, setTheme] = useState<PortalTheme>(() => { try { const saved=localStorage.getItem('portal_theme'); if(saved&&['BLACK','PINK','BLUE','RAINBOW'].includes(saved)) return saved as PortalTheme; } catch {} return 'BLACK'; });
   const [currentLang,setCurrentLang]=useState('original'); const [searchQuery,setSearchQuery]=useState('');
   const [filters,setFilters]=useState<FacetFilterState>({categories:[],regions:[],aiStatus:[],sources:[],languages:[],tags:[],tagLogic:'OR',search:'',excludeCategories:[],excludeRegions:[],excludeSources:[],excludeLanguages:[],excludeTags:[]});
   const [isTagExplorerOpen,setIsTagExplorerOpen]=useState(false); const [selectedArticleId,setSelectedArticleId]=useState<string|null>(null); const [currentArticleIds,setCurrentArticleIds]=useState<string[]>([]); const [storyDrawerCluster,setStoryDrawerCluster]=useState<{id:string;title:string}|null>(null); const [isAddEventOpen,setIsAddEventOpen]=useState(false); const [isDuplicateReviewOpen,setIsDuplicateReviewOpen]=useState(false); const [isEventInboxOpen,setIsEventInboxOpen]=useState(false); const [selectedIntegratedId,setSelectedIntegratedId]=useState<string|null>(null);
   const [tags,setTags]=useState<TagInfo[]>([]); const [pendingCandidateCount,setPendingCandidateCount]=useState(0); const [queuedUrlCount,setQueuedUrlCount]=useState(0); const [storyBatch,setStoryBatch]=useState<{batchId:string;command:string}|null>(null); const [storyMessage,setStoryMessage]=useState('');
-  useEffect(()=>{ if(controlledTab && controlledTab!==activeTab) setActiveTab(controlledTab); },[controlledTab]);
-  useEffect(()=>{ onActiveTabChange?.(activeTab); },[activeTab,onActiveTabChange]);
   const handleSelectArticle=(id:string,allIds?:string[])=>{setSelectedArticleId(id);if(allIds?.length)setCurrentArticleIds(allIds);};
   const handleLoadMoreArticles=async()=>{try{const res=await api.getArticles({categories:filters.categories.join(','),regions:(filters.regions||[]).join(','),aiStatus:(filters.aiStatus||[]).join(','),sources:filters.sources.join(','),languages:filters.languages.join(','),tags:filters.tags.join(','),excludeCategories:(filters.excludeCategories||[]).join(','),excludeRegions:(filters.excludeRegions||[]).join(','),excludeSources:(filters.excludeSources||[]).join(','),excludeLanguages:(filters.excludeLanguages||[]).join(','),excludeTags:(filters.excludeTags||[]).join(','),tagLogic:filters.tagLogic,search:filters.search,sort:'newest',lang:currentLang,limit:50,offset:currentArticleIds.length});const updated=Array.from(new Set([...currentArticleIds,...(res.articles||[]).map(a=>a.article_id)]));setCurrentArticleIds(updated);return updated;}catch{return currentArticleIds;}};
   const handleToggleTagFilter=(tagKey:string)=>{setFilters(p=>({...p,tags:p.tags.includes(tagKey)?p.tags.filter(t=>t!==tagKey):[...p.tags,tagKey]}));setSelectedArticleId(null);setActiveTab('NEWS');};
