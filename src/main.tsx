@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { NewsroomRoot } from './NewsroomRoot';
 import './index.css';
 import './newsroom.css';
+import './newsroom-v3.css';
 import './reader/reader-enhancements.css';
 
 createRoot(document.getElementById('root')!).render(
