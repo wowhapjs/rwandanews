@@ -1,22 +1,36 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { ArticleRecord } from './types.js';
 
 let cachedClient: SupabaseClient | null = null;
 let cachedConfigKey = '';
+const requestAccessToken = new AsyncLocalStorage<string>();
+
 export interface SupabaseConfig { url:string; key:string; configured:boolean }
 
 export function getSupabaseConfig():SupabaseConfig {
   const url=process.env.SUPABASE_URL?.trim()||'';
-  const key=process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()||process.env.SUPABASE_KEY?.trim()||process.env.SUPABASE_ANON_KEY?.trim()||'';
+  const key=process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()||process.env.SUPABASE_KEY?.trim()||process.env.SUPABASE_ANON_KEY?.trim()||process.env.SUPABASE_PUBLISHABLE_KEY?.trim()||'';
   return {url,key,configured:Boolean(url&&key)};
 }
+export function getSupabasePublicConfig():SupabaseConfig {
+  const url=process.env.SUPABASE_URL?.trim()||'';
+  const key=process.env.SUPABASE_PUBLISHABLE_KEY?.trim()||process.env.SUPABASE_ANON_KEY?.trim()||process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()||process.env.SUPABASE_KEY?.trim()||'';
+  return {url,key,configured:Boolean(url&&key)};
+}
+export function runWithSupabaseRequestToken<T>(token:string|undefined,fn:()=>T):T{return requestAccessToken.run(token||'',fn)}
 export function getSupabaseClient():SupabaseClient|null {
+  const token=requestAccessToken.getStore();
+  if(token){
+    const c=getSupabasePublicConfig(); if(!c.configured)return null;
+    return createClient(c.url,c.key,{global:{headers:{Authorization:`Bearer ${token}`}},auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
+  }
   const c=getSupabaseConfig(); if(!c.configured)return null;
   const k=`${c.url}::${c.key}`; if(cachedClient&&cachedConfigKey===k)return cachedClient;
   cachedClient=createClient(c.url,c.key,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}}); cachedConfigKey=k; return cachedClient;
 }
 export function getSupabaseAuthClient():SupabaseClient|null {
-  const c=getSupabaseConfig(); if(!c.configured)return null;
+  const c=getSupabasePublicConfig(); if(!c.configured)return null;
   return createClient(c.url,c.key,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
 }
 export async function testSupabaseConnection(){
