@@ -804,7 +804,6 @@ export class RebAdapter extends BaseSourceAdapter {
         author,
         publishedAt,
         sourceSection: 'news',
-        portalCategoryId: 'rwanda',
         leadImageUrl: finalLeadImage,
         imageUrls: uniqueImageUrls,
         contentBlocks
