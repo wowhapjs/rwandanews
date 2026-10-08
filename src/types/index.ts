@@ -41,9 +41,8 @@ export interface Article {
   published_at: string;
   collected_at: string;
   source_section?: string;
-  source_subcategory?: string;
-  portal_category_id: string;
   topic?: string;
+  topic_sub?: string;
   is_representative?: boolean;
   grouped_article_ids?: string[];
   cluster_articles?: any[];
@@ -77,7 +76,8 @@ export interface Article {
     published_at: string;
     source_id: string;
     lead_image_url?: string;
-    portal_category_id?: string;
+    topic?: string;
+    topic_sub?: string;
   }[];
   previousArticles?: {
     article_id: string;
@@ -85,7 +85,8 @@ export interface Article {
     published_at: string;
     source_id: string;
     lead_image_url?: string;
-    portal_category_id?: string;
+    topic?: string;
+    topic_sub?: string;
   }[];
   futureArticles?: {
     article_id: string;
@@ -93,7 +94,8 @@ export interface Article {
     published_at: string;
     source_id: string;
     lead_image_url?: string;
-    portal_category_id?: string;
+    topic?: string;
+    topic_sub?: string;
   }[];
 }
 
@@ -196,7 +198,8 @@ export interface IntegratedArticle {
   title: string;
   subtitle?: string;
   body: string;
-  portal_category_id: string;
+  topic: string;
+  topic_sub?: string;
   source_article_ids: string[];
   created_at: string;
 }

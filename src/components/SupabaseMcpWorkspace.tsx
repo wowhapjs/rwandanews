@@ -53,7 +53,8 @@ interface GroupArticle {
   original_subtitle?: string;
   original_body: string;
   published_at: string;
-  portal_category_id: string;
+  topic: string;
+  topic_sub?: string;
   processing_status: string;
   has_ko: boolean;
   has_en: boolean;
@@ -302,7 +303,7 @@ Supabase 데이터베이스의 \`public.articles\`를 직접 조회하고 고품
    - 만약 DB에 \`public.agent_batch_assignments\` 테이블이 없더라도 **절대 작업을 중단하지 마십시오.**
    - 배정 정보(그룹 번호 및 기사 ID 목록)가 지침서에 명시되어 있으므로 곧바로 \`public.articles\` 원문 조회 및 \`public.localized_articles\` 저장 단계로 직행하십시오.
 2. **원문 전문(\`original_body\`) 조회 및 0건 시 대처**:
-   - 기사 원문 전문은 \`SELECT article_id, original_title, original_body, portal_category_id, published_at FROM public.articles WHERE article_id IN (...) ORDER BY published_at DESC;\` 로 일괄 조회합니다.
+   - 기사 원문 전문은 \`SELECT article_id, original_title, original_body, topic, topic_sub, published_at FROM public.articles WHERE article_id IN (...) ORDER BY published_at DESC;\` 로 일괄 조회합니다.
    - 만약 쿼리 결과가 0건이라면 \`SELECT MAX(published_at) FROM public.articles;\` 로 DB의 최신 일자를 파악하고, 사용자에게 포털 화면에서 [동기화]를 눌러주시거나 기사 원문을 직접 전달해달라고 브리핑하십시오.
 3. **실제 DB 스키마 100% 준수**:
    - \`public.localized_articles\`의 언어 컬럼은 \`language\`가 아니라 반드시 **\`lang\`** ('ko', 'en', 'rw')입니다.
@@ -329,6 +330,7 @@ Supabase 데이터베이스의 \`public.articles\`를 직접 조회하고 고품
 UPDATE public.articles
 SET 
   topic = 'Economy', -- 9대 표준 영문 Topic 중 택 1
+  topic_sub = 'General',
   processing_status = 'PROCESSED',
   updated_at = NOW()
 WHERE article_id = 'ART-XXXXX';
@@ -341,17 +343,19 @@ INSERT INTO public.localized_articles (
   summary,
   body,
   topic,
+  topic_sub,
   processed_at
 ) VALUES 
-  ('ART-XXXXX', 'ko', '한국어 제목', '요약 1\\n요약 2\\n요약 3', '첫 번째 문단입니다.\\n\\n두 번째 문단입니다.', 'Economy', NOW()),
-  ('ART-XXXXX', 'en', 'English Title', 'Summary 1\\nSummary 2\\nSummary 3', 'First paragraph.\\n\\nSecond paragraph.', 'Economy', NOW()),
-  ('ART-XXXXX', 'rw', 'Umutwe mu Kinyarwanda', 'Incamake 1\\nIncamake 2\\nIncamake 3', 'Igika cya mbere.\\n\\nIgika cya kabiri.', 'Economy', NOW())
+  ('ART-XXXXX', 'ko', '한국어 제목', '요약 1\\n요약 2\\n요약 3', '첫 번째 문단입니다.\\n\\n두 번째 문단입니다.', 'Economy', 'General', NOW()),
+  ('ART-XXXXX', 'en', 'English Title', 'Summary 1\\nSummary 2\\nSummary 3', 'First paragraph.\\n\\nSecond paragraph.', 'Economy', 'General', NOW()),
+  ('ART-XXXXX', 'rw', 'Umutwe mu Kinyarwanda', 'Incamake 1\\nIncamake 2\\nIncamake 3', 'Igika cya mbere.\\n\\nIgika cya kabiri.', 'Economy', 'General', NOW())
 ON CONFLICT (article_id, lang) 
 DO UPDATE SET
   title = EXCLUDED.title,
   summary = EXCLUDED.summary,
   body = EXCLUDED.body,
   topic = EXCLUDED.topic,
+  topic_sub = EXCLUDED.topic_sub,
   processed_at = NOW();
 \`\`\``;
   };

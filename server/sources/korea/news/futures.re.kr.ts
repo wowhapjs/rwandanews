@@ -433,36 +433,6 @@ export class FuturesAdapter extends BaseSourceAdapter {
     return undefined;
   }
 
-  private inferPortalCategory(
-    root: FuturesDiscoveryRoot | undefined,
-    $: cheerio.CheerioAPI
-  ): string {
-    if (
-      root?.id === 'ai-semiconductor'
-      || root?.id === 'technology-science'
-    ) {
-      return 'tech';
-    }
-
-    if (root?.id === 'industry-economy' || root?.id === 'investment-signal') {
-      return 'economy';
-    }
-
-    const topText = normalizeWhitespace(
-      $('main, article').first().text().slice(0, 1200)
-    );
-
-    if (/AI·반도체|기술·과학|인공지능|반도체/.test(topText)) {
-      return 'tech';
-    }
-
-    if (/산업·경제|투자 시그널/.test(topText)) {
-      return 'economy';
-    }
-
-    return 'korea';
-  }
-
   async discoverArticles(options: DiscoveryOptions): Promise<DiscoveryResult> {
     const meta = this.getMetadata();
 
@@ -562,7 +532,6 @@ export class FuturesAdapter extends BaseSourceAdapter {
             const hint: DiscoveredArticleHint = {
               url: articleUrl,
               section: root.group,
-              subcategory: root.id,
               publishedAtHint,
               titleHint
             };
@@ -899,13 +868,6 @@ export class FuturesAdapter extends BaseSourceAdapter {
         uniqueImageUrls.unshift(finalLeadImage);
       }
 
-      const root =
-        hint?.subcategory
-          ? DISCOVERY_ROOTS.find(
-              candidate => candidate.id === hint.subcategory
-            )
-          : undefined;
-
       return this.normalizeArticle({
         sourceId: meta.id,
         sourceUrl: normalizedUrl,
@@ -916,9 +878,7 @@ export class FuturesAdapter extends BaseSourceAdapter {
         originalBody: bodyText,
         author,
         publishedAt,
-        sourceSection: hint?.section || root?.group || 'futures',
-        sourceSubcategory: hint?.subcategory || root?.id,
-        portalCategoryId: this.inferPortalCategory(root, $),
+        sourceSection: hint?.section || 'futures',
         leadImageUrl: finalLeadImage,
         imageUrls: uniqueImageUrls,
         contentBlocks

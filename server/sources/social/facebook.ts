@@ -647,7 +647,6 @@ export class FacebookRwandaAdapter extends BaseSourceAdapter {
       originalBody: body,
       author: post.authorName,
       publishedAt,
-      portalCategoryId: 'undefined',
       region: 'rwanda',
       leadImageUrl: post.imageUrls[0] || undefined,
       imageUrls: post.imageUrls,
