@@ -1,1 +1,12 @@
-export type ArticleWorkflowState='DRAFT'|'PENDING_REVIEW'|'ON_HOLD'|'APPROVED'|'PUBLISHED'|'ARCHIVED';export type WorkflowRole='EDITOR'|'ADMIN';const transitions:Record<ArticleWorkflowState,ArticleWorkflowState[]>={DRAFT:['PENDING_REVIEW','ARCHIVED'],PENDING_REVIEW:['ON_HOLD','APPROVED','ARCHIVED'],ON_HOLD:['DRAFT','PENDING_REVIEW','ARCHIVED'],APPROVED:['PUBLISHED','ARCHIVED'],PUBLISHED:['PENDING_REVIEW','ARCHIVED'],ARCHIVED:['DRAFT']};export function canTransitionArticle(from:ArticleWorkflowState,to:ArticleWorkflowState,role:WorkflowRole){if(!transitions[from].includes(to))return false;if(['APPROVED','PUBLISHED'].includes(to))return role==='ADMIN';return true}export function assertArticleTransition(from:ArticleWorkflowState,to:ArticleWorkflowState,role:WorkflowRole){if(!canTransitionArticle(from,to,role))throw new Error(`Article transition not permitted: ${from} -> ${to}`)}
+export type ArticleWorkflowState='DRAFT'|'PENDING_REVIEW'|'ON_HOLD'|'APPROVED'|'PUBLISHED'|'ARCHIVED';
+export type WorkflowRole='EDITOR'|'ADMIN';
+const transitions:Record<ArticleWorkflowState,ArticleWorkflowState[]>={
+ DRAFT:['PENDING_REVIEW','ARCHIVED'],
+ PENDING_REVIEW:['ON_HOLD','APPROVED','ARCHIVED'],
+ ON_HOLD:['DRAFT','PENDING_REVIEW','APPROVED','ARCHIVED'],
+ APPROVED:['DRAFT','PENDING_REVIEW','PUBLISHED','ARCHIVED'],
+ PUBLISHED:['DRAFT','PENDING_REVIEW','ARCHIVED'],
+ ARCHIVED:['DRAFT']
+};
+export function canTransitionArticle(from:ArticleWorkflowState,to:ArticleWorkflowState,role:WorkflowRole){if(!transitions[from].includes(to))return false;if(['APPROVED','PUBLISHED'].includes(to))return role==='ADMIN';return true}
+export function assertArticleTransition(from:ArticleWorkflowState,to:ArticleWorkflowState,role:WorkflowRole){if(!canTransitionArticle(from,to,role))throw new Error(`Article transition not permitted: ${from} -> ${to}`)}

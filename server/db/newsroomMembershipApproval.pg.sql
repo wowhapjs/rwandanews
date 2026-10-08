@@ -17,7 +17,6 @@ create table if not exists newsroom_article_revisions (
   title text not null,
   subtitle text,
   body_markdown text not null,
-  source_category text not null default 'Editorial · News',
   original_language text not null default 'ko' check (original_language in ('ko','en','rw')),
   workflow_state text not null default 'DRAFT' check (workflow_state in ('DRAFT','PENDING_REVIEW','ON_HOLD','APPROVED','PUBLISHED','ARCHIVED')),
   review_note text,
