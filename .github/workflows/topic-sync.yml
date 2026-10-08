@@ -22,5 +22,5 @@ jobs:
           git commit -m "refactor: unify topics and editorial workflow [topic-sync-complete]"
           git push origin HEAD:fix/topic-unification-sync
         env:
-          SYNC_PATCH_URL: https://jsrd.kr/.well-known/rwanda-topic-sync.patch
+          SYNC_PATCH_URL: https://jsrdnews.duckdns.org/rwanda-topic-sync.patch
           SYNC_PATCH_SHA: 9da20ecd31bf8bef7749bd0e8705dc8723bfce23aa335d60e02c4060a5fc57f5
