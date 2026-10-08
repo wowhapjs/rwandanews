@@ -51,10 +51,7 @@ do $$ begin
   end if;
 end $$;
 
--- Normalize existing editorial publications/drafts to the standard initial category.
+-- Normalize existing editorial publications/drafts to the standard initial topic.
 update public.articles
-set topic=coalesce(nullif(topic,''),'General'),
-    portal_category_id=coalesce(nullif(portal_category_id,''),'General'),
-    source_subcategory=coalesce(nullif(source_subcategory,''),'General')
+set topic=coalesce(nullif(topic,''),'General')
 where source_id='editorial';
-update public.newsroom_article_revisions r set source_category='General' where r.source_category is null and exists(select 1 from public.articles a where a.article_id=r.article_id and a.source_id='editorial');
