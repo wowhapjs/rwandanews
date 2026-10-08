@@ -1101,7 +1101,7 @@ Keep article_id, block_id, and image_id unchanged. Return the completed Excel wo
                 >
                   <div className="flex items-center justify-between text-xs">
                     <span className="px-2 py-0.5 rounded text-[10px] uppercase font-bold bg-[var(--accent)]/15 text-[var(--accent)]">
-                      {ia.portal_category_id}
+                      {ia.topic}
                     </span>
                     <span className="text-[var(--text-secondary)]">
                       Synthesized from {ia.source_article_ids.length} sources

@@ -21,8 +21,8 @@ import {
 } from 'lucide-react';
 import { t } from '../lib/i18n';
 
-const getDisplayTopic = (art: { topic?: string; portal_category_id?: string }): string => {
-  const val = art.topic || art.portal_category_id;
+const getDisplayTopic = (art: { topic?: string }): string => {
+  const val = art.topic;
   if (!val || val === 'undefined' || val === 'null' || val.trim() === '') {
     return 'General';
   }

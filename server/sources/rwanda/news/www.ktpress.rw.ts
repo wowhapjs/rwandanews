@@ -16,7 +16,6 @@ type KtPressDiscoveryRoot = {
   name: string;
   group: 'news' | 'business' | 'special-reports' | 'voices' | 'sports' | 'society' | 'showbiz';
   path: string;
-  portalCategoryId?: string;
 };
 
 /**
@@ -53,28 +52,24 @@ const DISCOVERY_ROOTS: KtPressDiscoveryRoot[] = [
     name: 'News',
     group: 'news',
     path: '/category/news/',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'national',
     name: 'National',
     group: 'news',
     path: '/category/news/national/',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'regional',
     name: 'Regional',
     group: 'news',
     path: '/category/news/regional/',
-    portalCategoryId: 'africa'
   },
   {
     id: 'international',
     name: 'International',
     group: 'news',
     path: '/category/news/international/',
-    portalCategoryId: 'world'
   },
 
   // Business & Tech parent + all children
@@ -83,35 +78,30 @@ const DISCOVERY_ROOTS: KtPressDiscoveryRoot[] = [
     name: 'Business & Tech',
     group: 'business',
     path: '/category/business/',
-    portalCategoryId: 'economy'
   },
   {
     id: 'companies',
     name: 'Companies',
     group: 'business',
     path: '/category/business/companies/',
-    portalCategoryId: 'economy'
   },
   {
     id: 'economy',
     name: 'Economy',
     group: 'business',
     path: '/category/business/economy/',
-    portalCategoryId: 'economy'
   },
   {
     id: 'markets',
     name: 'Markets',
     group: 'business',
     path: '/category/business/markets/',
-    portalCategoryId: 'economy'
   },
   {
     id: 'technology',
     name: 'Technology',
     group: 'business',
     path: '/category/business/tech/',
-    portalCategoryId: 'tech'
   },
 
   // Standalone top-level categories
@@ -120,35 +110,30 @@ const DISCOVERY_ROOTS: KtPressDiscoveryRoot[] = [
     name: 'Special Reports',
     group: 'special-reports',
     path: '/category/special-reports/',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'voices',
     name: 'Voices',
     group: 'voices',
     path: '/category/voices/',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'sports',
     name: 'Sports',
     group: 'sports',
     path: '/category/sports/',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'society',
     name: 'Society',
     group: 'society',
     path: '/category/society/',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'showbiz',
     name: 'ShowBiz',
     group: 'showbiz',
     path: '/category/showbiz/',
-    portalCategoryId: 'rwanda'
   }
 ];
 
@@ -497,10 +482,7 @@ export class KtPressAdapter extends BaseSourceAdapter {
 
             const hint: DiscoveredArticleHint = {
               url: articleUrl,
-
-              // Preserve both levels of source taxonomy.
-              section: root.group,
-              subcategory: root.id,
+            section: root.group,
 
               publishedAtHint,
               titleHint
@@ -593,108 +575,12 @@ export class KtPressAdapter extends BaseSourceAdapter {
     };
   }
 
-  private detectDetailTaxonomy(
-    $: cheerio.CheerioAPI,
-    hint?: DiscoveredArticleHint
-  ): {
-    sourceSection: string;
-    sourceSubcategory?: string;
-    portalCategoryId: string;
-  } {
-    const categoryNames: string[] = [];
+  private detectSourceSection($: cheerio.CheerioAPI, hint?: DiscoveredArticleHint): string {
+    if (hint?.section) return hint.section;
     const categoryPaths: string[] = [];
-
-    $('a[href*="/category/"]').each((_, el) => {
-      const href = $(el).attr('href');
-      if (!href) return;
-
-      let normalized: string;
-
-      try {
-        normalized = normalizeUrl(href, this.getMetadata().homeUrl);
-      } catch {
-        return;
-      }
-
-      const parsed = new URL(normalized);
-      if (parsed.hostname !== this.getMetadata().domain) return;
-
-      const text = normalizeWhitespace($(el).text());
-      if (text) categoryNames.push(text);
-      categoryPaths.push(parsed.pathname);
-    });
-
-    const rootFromHint =
-      hint?.subcategory
-        ? DISCOVERY_ROOTS.find(root => root.id === hint.subcategory)
-        : undefined;
-
-    let sourceSection =
-      hint?.section
-      || rootFromHint?.group
-      || 'news';
-
-    let sourceSubcategory =
-      hint?.subcategory
-      || rootFromHint?.id;
-
-    /**
-     * If no usable discovery hint reached this worker, infer taxonomy from
-     * detail-page category links.
-     */
-    if (!hint) {
-      const matchedRoot = DISCOVERY_ROOTS.find(root =>
-        categoryPaths.some(path => {
-          const rootPath = new URL(
-            root.path,
-            this.getMetadata().homeUrl
-          ).pathname.replace(/\/+$/, '/');
-
-          return path.replace(/\/+$/, '/') === rootPath;
-        })
-      );
-
-      if (matchedRoot) {
-        sourceSection = matchedRoot.group;
-        sourceSubcategory = matchedRoot.id;
-      }
-    }
-
-    let portalCategoryId =
-      rootFromHint?.portalCategoryId
-      || 'rwanda';
-
-    const taxonomyText =
-      `${sourceSection} ${sourceSubcategory || ''} ${categoryNames.join(' ')}`
-        .toLowerCase();
-
-    if (
-      taxonomyText.includes('technology')
-      || taxonomyText.includes('tech')
-    ) {
-      portalCategoryId = 'tech';
-    } else if (
-      taxonomyText.includes('business')
-      || taxonomyText.includes('economy')
-      || taxonomyText.includes('market')
-      || taxonomyText.includes('companies')
-    ) {
-      portalCategoryId = 'economy';
-    } else if (
-      taxonomyText.includes('international')
-    ) {
-      portalCategoryId = 'world';
-    } else if (
-      taxonomyText.includes('regional')
-    ) {
-      portalCategoryId = 'africa';
-    }
-
-    return {
-      sourceSection,
-      sourceSubcategory,
-      portalCategoryId
-    };
+    $('a[href*="/category/"]').each((_, el) => { const href = $(el).attr('href'); if (!href) return; try { categoryPaths.push(new URL(normalizeUrl(href, this.getMetadata().homeUrl)).pathname); } catch {} });
+    const matchedRoot = DISCOVERY_ROOTS.find(root => categoryPaths.some(path => path.replace(/\/+$/, '/') === new URL(root.path, this.getMetadata().homeUrl).pathname.replace(/\/+$/, '/')));
+    return matchedRoot?.group || 'news';
   }
 
   private extractKtPressContent(
@@ -924,8 +810,8 @@ export class KtPressAdapter extends BaseSourceAdapter {
       const canonicalUrl =
         extractCanonicalUrl(html, normalizedUrl);
 
-      const taxonomy =
-        this.detectDetailTaxonomy($, hint);
+      const sourceSection =
+        this.detectSourceSection($, hint);
 
       const {
         contentBlocks,
@@ -977,10 +863,7 @@ export class KtPressAdapter extends BaseSourceAdapter {
         author,
         publishedAt,
 
-        sourceSection: taxonomy.sourceSection,
-        sourceSubcategory: taxonomy.sourceSubcategory,
-
-        portalCategoryId: taxonomy.portalCategoryId,
+        sourceSection,
 
         leadImageUrl: finalLeadImage,
         imageUrls: uniqueImageUrls,

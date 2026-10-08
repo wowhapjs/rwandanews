@@ -15,7 +15,6 @@ type KigaliTodayRoot = {
   id: string;
   name: string;
   path: string;
-  portalCategoryId?: string;
 };
 
 type ListingDateState = {
@@ -34,26 +33,26 @@ type ListingDateState = {
  *   globally deduplicated by normalized article URL.
  */
 const DISCOVERY_ROOTS: KigaliTodayRoot[] = [
-  { id: 'amakuru', name: 'Amakuru', path: '/amakuru', portalCategoryId: 'rwanda' },
-  { id: 'agaseke-ka-weekend', name: 'Agaseke ka Weekend', path: '/agaseke-ka-weekend', portalCategoryId: 'rwanda' },
-  { id: 'imyidagaduro', name: 'Imyidagaduro', path: '/imyidagaduro', portalCategoryId: 'rwanda' },
+  { id: 'amakuru', name: 'Amakuru', path: '/amakuru' },
+  { id: 'agaseke-ka-weekend', name: 'Agaseke ka Weekend', path: '/agaseke-ka-weekend' },
+  { id: 'imyidagaduro', name: 'Imyidagaduro', path: '/imyidagaduro' },
 
-  { id: 'amatangazo', name: 'Amatangazo', path: '/amatangazo', portalCategoryId: 'rwanda' },
-  { id: 'ntibisanzwe', name: 'Ntibisanzwe', path: '/ntibisanzwe', portalCategoryId: 'rwanda' },
+  { id: 'amatangazo', name: 'Amatangazo', path: '/amatangazo' },
+  { id: 'ntibisanzwe', name: 'Ntibisanzwe', path: '/ntibisanzwe' },
 
-  { id: 'ubukungu', name: 'Ubukungu', path: '/ubukungu', portalCategoryId: 'economy' },
-  { id: 'ubuzima', name: 'Ubuzima', path: '/ubuzima', portalCategoryId: 'rwanda' },
-  { id: 'uburezi', name: 'Uburezi', path: '/uburezi', portalCategoryId: 'rwanda' },
-  { id: 'ubuhinzi', name: 'Ubuhinzi', path: '/ubuhinzi', portalCategoryId: 'rwanda' },
-  { id: 'ikoranabuhanga', name: 'Ikoranabuhanga', path: '/ikoranabuhanga', portalCategoryId: 'tech' },
-  { id: 'ubutabera', name: 'Ubutabera', path: '/ubutabera', portalCategoryId: 'rwanda' },
-  { id: 'kwibuka', name: 'Kwibuka', path: '/kwibuka', portalCategoryId: 'rwanda' },
-  { id: 'inkuru-zicukumbuye', name: 'Inkuru Zicukumbuye', path: '/Inkuru-Zicukumbuye', portalCategoryId: 'rwanda' },
-  { id: 'umuco', name: 'Umuco', path: '/umuco', portalCategoryId: 'rwanda' },
-  { id: 'ubukerarugendo', name: 'Ubukerarugendo', path: '/ubukerarugendo', portalCategoryId: 'rwanda' },
+  { id: 'ubukungu', name: 'Ubukungu', path: '/ubukungu' },
+  { id: 'ubuzima', name: 'Ubuzima', path: '/ubuzima' },
+  { id: 'uburezi', name: 'Uburezi', path: '/uburezi' },
+  { id: 'ubuhinzi', name: 'Ubuhinzi', path: '/ubuhinzi' },
+  { id: 'ikoranabuhanga', name: 'Ikoranabuhanga', path: '/ikoranabuhanga' },
+  { id: 'ubutabera', name: 'Ubutabera', path: '/ubutabera' },
+  { id: 'kwibuka', name: 'Kwibuka', path: '/kwibuka' },
+  { id: 'inkuru-zicukumbuye', name: 'Inkuru Zicukumbuye', path: '/Inkuru-Zicukumbuye' },
+  { id: 'umuco', name: 'Umuco', path: '/umuco' },
+  { id: 'ubukerarugendo', name: 'Ubukerarugendo', path: '/ubukerarugendo' },
 
-  { id: 'umutekano', name: 'Umutekano', path: '/umutekano', portalCategoryId: 'rwanda' },
-  { id: 'imikino', name: 'Imikino', path: '/imikino', portalCategoryId: 'rwanda' }
+  { id: 'umutekano', name: 'Umutekano', path: '/umutekano' },
+  { id: 'imikino', name: 'Imikino', path: '/imikino' }
 ];
 
 function findJsonLdString(
@@ -571,15 +570,9 @@ export class KigaliTodayAdapter extends BaseSourceAdapter {
             const sourceSection =
               pathParts[0] || root.id;
 
-            const sourceSubcategory =
-              articleMarkerIndex >= 2
-                ? pathParts[1]
-                : undefined;
-
             const hint: DiscoveredArticleHint = {
               url: articleUrl,
               section: sourceSection,
-              subcategory: sourceSubcategory,
               publishedAtHint,
               titleHint
             };
@@ -1125,45 +1118,6 @@ export class KigaliTodayAdapter extends BaseSourceAdapter {
         || hint?.section
         || 'amakuru';
 
-      const sourceSubcategory =
-        articleMarkerIndex >= 2
-          ? pathParts[1]
-          : hint?.subcategory;
-
-      const root =
-        DISCOVERY_ROOTS.find(
-          candidate =>
-            candidate.id.toLowerCase()
-            === sourceSection.toLowerCase()
-            || new URL(
-              candidate.path,
-              meta.homeUrl
-            )
-              .pathname
-              .split('/')
-              .filter(Boolean)[0]
-              ?.toLowerCase()
-            === sourceSection.toLowerCase()
-        );
-
-      let portalCategoryId =
-        root?.portalCategoryId
-        || 'rwanda';
-
-      if (
-        sourceSection
-          .toLowerCase()
-          .includes('ubukungu')
-      ) {
-        portalCategoryId = 'economy';
-      } else if (
-        sourceSection
-          .toLowerCase()
-          .includes('ikoranabuhanga')
-      ) {
-        portalCategoryId = 'tech';
-      }
-
       const {
         contentBlocks,
         imageUrls,
@@ -1368,8 +1322,6 @@ export class KigaliTodayAdapter extends BaseSourceAdapter {
         author,
         publishedAt,
         sourceSection,
-        sourceSubcategory,
-        portalCategoryId,
         leadImageUrl: finalLeadImage,
         imageUrls: uniqueImageUrls,
         contentBlocks

@@ -37,6 +37,11 @@ function countWords(text?: string | null): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
 }
 
+export function normalizeTopicFilterValue(value:string):string {
+  const clean=String(value||'').trim();
+  return clean.toLowerCase()==='tech'?'AI/Tech':clean;
+}
+
 /**
  * Checks if Supabase client is connected and ready
  */
@@ -63,19 +68,16 @@ export async function fetchArticlesDirectly(
 
   let query = client.from('articles').select('*', { count: 'exact' });
 
-  // 1. Facet: Categories (topic or portal_category_id)
+  // 1. Facet: Topic (single authoritative classification)
   if (options.categories && options.categories.length > 0) {
-    const catList = options.categories;
-    // Check if matching topic or portal_category_id
-    query = query.or(
-      `portal_category_id.in.(${catList.join(',')}),topic.in.(${catList.join(',')})`
-    );
+    const catList = options.categories.map(normalizeTopicFilterValue);
+    query = query.in('topic', catList);
   }
 
   // 1-1. Exclude Categories
   if (options.excludeCategories && options.excludeCategories.length > 0) {
     for (const ec of options.excludeCategories) {
-      query = query.neq('portal_category_id', ec).neq('topic', ec);
+      query = query.neq('topic', normalizeTopicFilterValue(ec));
     }
   }
 
@@ -183,13 +185,14 @@ export async function fetchArticlesDirectly(
     const mapped = rows.map((art: any) => {
       const loc = locMap.get(art.article_id);
       const rawTopic = (art.topic && art.topic !== 'undefined' && art.topic !== 'null') ? String(art.topic).trim() : null;
-      const rawCat = (art.portal_category_id && art.portal_category_id !== 'undefined' && art.portal_category_id !== 'null') ? String(art.portal_category_id).trim() : null;
-      const normalizedCategory = rawTopic || rawCat || 'General';
+      const normalizedCategory = rawTopic || 'General';
+      const topicSub = (art.topic_sub && art.topic_sub !== 'undefined' && art.topic_sub !== 'null') ? String(art.topic_sub).trim() : 'General';
       const relatedCount = art.story_cluster_id ? (art.source_id === 'grouping' ? (art.grouped_article_ids?.length || 2) : 2) : 0;
       return {
         ...art,
         topic: normalizedCategory,
-        portal_category_id: normalizedCategory,
+        topic_sub: topicSub,
+        lead_image_url: art.lead_image_url || art.image_urls?.[0] || null,
         relatedStoriesCount: relatedCount,
         displayTitle: loc?.title || art.original_title,
         displaySubtitle: loc?.subtitle || art.original_subtitle,
@@ -204,13 +207,14 @@ export async function fetchArticlesDirectly(
   // Original display
   const mapped = rows.map((art: any) => {
     const rawTopic = (art.topic && art.topic !== 'undefined' && art.topic !== 'null') ? String(art.topic).trim() : null;
-    const rawCat = (art.portal_category_id && art.portal_category_id !== 'undefined' && art.portal_category_id !== 'null') ? String(art.portal_category_id).trim() : null;
-    const normalizedCategory = rawTopic || rawCat || 'General';
+    const normalizedCategory = rawTopic || 'General';
+    const topicSub = (art.topic_sub && art.topic_sub !== 'undefined' && art.topic_sub !== 'null') ? String(art.topic_sub).trim() : 'General';
     const relatedCount = art.story_cluster_id ? (art.source_id === 'grouping' ? (art.grouped_article_ids?.length || 2) : 2) : 0;
     return {
       ...art,
       topic: normalizedCategory,
-      portal_category_id: normalizedCategory,
+      topic_sub: topicSub,
+      lead_image_url: art.lead_image_url || art.image_urls?.[0] || null,
       relatedStoriesCount: relatedCount,
       displayTitle: art.original_title,
       displaySubtitle: art.original_subtitle,
@@ -237,10 +241,10 @@ export async function fetchArticleDetailDirectly(articleId: string): Promise<any
 
   if (error || !art) return null;
 
-  // Normalize topic / portal_category_id
-  const cat = art.topic || art.portal_category_id || 'General';
-  art.topic = cat;
-  art.portal_category_id = cat;
+  // Normalize the single authoritative topic fields.
+  art.topic = (art.topic && art.topic !== 'undefined' && art.topic !== 'null') ? art.topic : 'General';
+  art.topic_sub = (art.topic_sub && art.topic_sub !== 'undefined' && art.topic_sub !== 'null') ? art.topic_sub : 'General';
+  art.lead_image_url = art.lead_image_url || art.image_urls?.[0] || null;
 
   // Fetch localized versions
   const { data: locList } = await client
@@ -555,8 +559,8 @@ export async function fetchUnprocessedGroupArticlesDirectly(groupNumber: number)
     const artNumber = numberMap.get(art.article_id) || `#${startIndex + idx + 1}`;
     return {
       ...art,
-      topic: art.topic || art.portal_category_id || 'General',
-      portal_category_id: art.portal_category_id || art.topic || 'General',
+      topic: art.topic || 'General',
+      topic_sub: art.topic_sub || 'General',
       group_index: idx + 1,
       article_number: artNumber
     };
@@ -643,7 +647,8 @@ export async function fetchGroupArticlesDirectly(groupNumber: number): Promise<a
       original_body: art.original_body,
       author: art.author,
       published_at: art.published_at,
-      portal_category_id: art.portal_category_id,
+      topic: art.topic || 'General',
+      topic_sub: art.topic_sub || 'General',
       processing_status: art.processing_status,
       has_ko: Boolean(ko),
       has_en: Boolean(en),
@@ -735,7 +740,7 @@ export async function saveProcessedArticleDirectly(data: {
   body_ko: string;
   body_en: string;
   body_rw: string;
-  category_label?: string;
+  topic_sub?: string;
 }): Promise<{ success: boolean; message: string }> {
   const client = getSupabaseClient();
   if (!client) {
@@ -747,6 +752,7 @@ export async function saveProcessedArticleDirectly(data: {
     .from('articles')
     .update({
       topic: data.topic,
+      topic_sub: data.topic_sub || 'General',
       processing_status: 'PROCESSED',
       updated_at: new Date().toISOString()
     })
@@ -764,8 +770,8 @@ export async function saveProcessedArticleDirectly(data: {
       title: data.title_ko,
       summary: data.summary_ko,
       body: data.body_ko,
-      category_label: data.category_label || data.topic,
       topic: data.topic,
+      topic_sub: data.topic_sub || 'General',
       processed_at: new Date().toISOString()
     },
     {
@@ -774,8 +780,8 @@ export async function saveProcessedArticleDirectly(data: {
       title: data.title_en,
       summary: data.summary_en,
       body: data.body_en,
-      category_label: data.category_label || data.topic,
       topic: data.topic,
+      topic_sub: data.topic_sub || 'General',
       processed_at: new Date().toISOString()
     },
     {
@@ -784,8 +790,8 @@ export async function saveProcessedArticleDirectly(data: {
       title: data.title_rw,
       summary: data.summary_rw,
       body: data.body_rw,
-      category_label: data.category_label || data.topic,
       topic: data.topic,
+      topic_sub: data.topic_sub || 'General',
       processed_at: new Date().toISOString()
     }
   ];
@@ -824,9 +830,8 @@ export async function insertArticleDirectly(art: ArticleRecord): Promise<void> {
     published_at: art.published_at,
     collected_at: art.collected_at || new Date().toISOString(),
     source_section: art.source_section,
-    source_subcategory: art.source_subcategory,
-    portal_category_id: art.portal_category_id,
-    topic: (art as any).topic || art.portal_category_id,
+    topic: (art as any).topic || 'General',
+    topic_sub: (art as any).topic_sub || 'General',
     lead_image_url: art.lead_image_url,
     image_urls: art.image_urls || [],
     content_blocks: art.content_blocks || [],

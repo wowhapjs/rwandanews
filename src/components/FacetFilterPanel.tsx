@@ -45,15 +45,18 @@ export const FacetFilterPanel: React.FC<FacetFilterPanelProps> = ({
 
   const allAvailableTags = queriedTags.length > 0 ? queriedTags : propAvailableTags;
 
-  // Primary Row 1: Main Topic Category - with Education between Tech and Economy
+  // Primary Row 1: single authoritative topic vocabulary.
   const categories = [
+    { id: 'General', label: 'General' },
+    { id: 'Politics', label: 'Politics' },
+    { id: 'Economy', label: 'Economy' },
+    { id: 'Real Estate', label: 'Real Estate' },
     { id: 'AI/Tech', label: 'AI/Tech' },
     { id: 'Education', label: 'Education' },
-    { id: 'Economy/RealEstate', label: 'Economy/RealEstate' },
     { id: 'Sports', label: 'Sports' },
-    { id: 'Politics', label: 'Politics' },
     { id: 'Volunteers', label: 'Volunteers' },
     { id: 'Nature/Living', label: 'Nature/Living' },
+    { id: 'Culture', label: 'Culture' },
   ];
 
   // Region Categories (rwanda/korea/africa/world)

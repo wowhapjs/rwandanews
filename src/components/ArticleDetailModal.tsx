@@ -411,7 +411,7 @@ export const ArticleDetailModal: React.FC<ArticleDetailModalProps> = ({
                   </span>
                 )}
                 {(() => {
-                  const raw = article?.topic || article?.portal_category_id;
+                  const raw = article?.topic;
                   const displayCat = (raw && raw !== 'undefined' && raw !== 'null' && raw.trim() !== '') ? raw.trim() : 'General';
                   return (
                     <span className="flex items-center space-x-1 bg-[var(--bg-hover)] px-2.5 py-1 rounded-md">

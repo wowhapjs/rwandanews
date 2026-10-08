@@ -30,8 +30,6 @@ export interface ParsedArticle {
   publishedAt: string; // ISO date string - NEVER fabricated
   updatedAt?: string;
   sourceSection?: string;
-  sourceSubcategory?: string;
-  portalCategoryId: string;
   region?: string;
   leadImageUrl?: string;
   imageUrls: string[];
@@ -41,7 +39,6 @@ export interface ParsedArticle {
 export interface DiscoveredArticleHint {
   url: string;
   section?: string;
-  subcategory?: string;
   publishedAtHint?: string;
   titleHint?: string;
 }

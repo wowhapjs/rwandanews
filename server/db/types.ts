@@ -56,9 +56,8 @@ export interface ArticleRecord {
   updated_at?: string;
   collected_at: string;
   source_section?: string;
-  source_subcategory?: string;
-  portal_category_id: string;
   topic?: string;
+  topic_sub?: string;
   is_representative?: boolean;
   grouped_article_ids?: string[];
   region?: string;
@@ -182,7 +181,8 @@ export interface IntegratedArticleRecord {
   title: string;
   subtitle?: string;
   body: string;
-  portal_category_id: string;
+  topic: string;
+  topic_sub?: string;
   source_article_ids: string[];
   created_at: string;
   updated_at: string;
@@ -226,7 +226,8 @@ export interface LocalizedArticleRecord {
   subtitle?: string;
   summary?: string;
   body: string;
-  category_label?: string;
+  topic?: string;
+  topic_sub?: string;
   processed_at: string;
   batch_id?: string;
   content_blocks?: ContentBlock[];

@@ -502,7 +502,6 @@ export class RdbAdapter extends BaseSourceAdapter {
         sourceSection: 'news-press-release',
         // RDB content spans tourism, conservation, investment, events, etc.;
         // keep the broad portal category and reclassify later.
-        portalCategoryId: 'rwanda',
         leadImageUrl: finalLeadImage,
         imageUrls: uniqueImages,
         contentBlocks

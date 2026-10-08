@@ -19,7 +19,6 @@ type NewTimesDiscoveryRoot = {
   group: NewTimesGroup;
   path: string;
   categorySlug?: string;
-  portalCategoryId?: string;
 };
 
 /**
@@ -42,7 +41,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     name: 'News',
     group: 'news',
     path: '/morearticles/news',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'rwanda',
@@ -50,7 +48,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'news',
     categorySlug: 'rwanda',
     path: '/morearticles/news/rwanda',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'business',
@@ -58,7 +55,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'news',
     categorySlug: 'business',
     path: '/morearticles/news/business',
-    portalCategoryId: 'economy'
   },
   {
     id: 'africa',
@@ -66,7 +62,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'news',
     categorySlug: 'africa',
     path: '/morearticles/news/africa',
-    portalCategoryId: 'africa'
   },
   {
     id: 'international',
@@ -74,7 +69,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'news',
     categorySlug: 'international',
     path: '/morearticles/news/international',
-    portalCategoryId: 'world'
   },
   {
     id: 'technology',
@@ -82,7 +76,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'news',
     categorySlug: 'technology',
     path: '/morearticles/news/technology',
-    portalCategoryId: 'tech'
   },
   {
     id: 'agriculture',
@@ -90,7 +83,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'news',
     categorySlug: 'agriculture',
     path: '/morearticles/news/agriculture',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'coronavirus',
@@ -98,7 +90,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'news',
     categorySlug: 'coronavirus',
     path: '/morearticles/news/coronavirus',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'politics',
@@ -106,7 +97,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'news',
     categorySlug: 'politics',
     path: '/morearticles/news/politics',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'environment',
@@ -114,7 +104,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'news',
     categorySlug: 'environment',
     path: '/morearticles/news/environment',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'energy',
@@ -122,7 +111,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'news',
     categorySlug: 'energy',
     path: '/morearticles/news/energy',
-    portalCategoryId: 'economy'
   },
   {
     id: 'infrastructure',
@@ -130,7 +118,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'news',
     categorySlug: 'infrastructure',
     path: '/morearticles/news/infrastructure',
-    portalCategoryId: 'economy'
   },
   {
     id: 'health',
@@ -138,7 +125,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'news',
     categorySlug: 'health',
     path: '/morearticles/news/health',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'crime',
@@ -146,7 +132,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'news',
     categorySlug: 'crime',
     path: '/morearticles/news/crime',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'finance',
@@ -154,7 +139,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'news',
     categorySlug: 'finance',
     path: '/morearticles/news/finance',
-    portalCategoryId: 'economy'
   },
   {
     id: 'law',
@@ -162,7 +146,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'news',
     categorySlug: 'law',
     path: '/morearticles/news/law',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'housing',
@@ -170,7 +153,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'news',
     categorySlug: 'housing',
     path: '/morearticles/news/housing',
-    portalCategoryId: 'economy'
   },
   {
     id: 'aviation',
@@ -178,7 +160,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'news',
     categorySlug: 'aviation',
     path: '/morearticles/news/aviation',
-    portalCategoryId: 'economy'
   },
   {
     id: 'tourism',
@@ -186,7 +167,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'news',
     categorySlug: 'tourism',
     path: '/morearticles/news/tourism',
-    portalCategoryId: 'economy'
   },
   {
     id: 'featured',
@@ -194,7 +174,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'news',
     categorySlug: 'featured',
     path: '/morearticles/news/featured',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'culture',
@@ -202,7 +181,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'news',
     categorySlug: 'culture',
     path: '/morearticles/news/culture',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'economy',
@@ -210,7 +188,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'news',
     categorySlug: 'economy',
     path: '/morearticles/news/economy',
-    portalCategoryId: 'economy'
   },
   {
     id: 'education',
@@ -218,7 +195,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'news',
     categorySlug: 'education',
     path: '/morearticles/news/education',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'security',
@@ -226,7 +202,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'news',
     categorySlug: 'security',
     path: '/morearticles/news/security',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'women',
@@ -234,7 +209,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'news',
     categorySlug: 'women',
     path: '/morearticles/news/women',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'science',
@@ -242,7 +216,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'news',
     categorySlug: 'science',
     path: '/morearticles/news/science',
-    portalCategoryId: 'tech'
   },
   {
     id: 'religion',
@@ -250,7 +223,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'news',
     categorySlug: 'religion',
     path: '/morearticles/news/religion',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'kwibuka',
@@ -258,7 +230,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'news',
     categorySlug: 'kwibuka',
     path: '/morearticles/news/kwibuka',
-    portalCategoryId: 'rwanda'
   },
 
   /**
@@ -272,7 +243,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'news',
     categorySlug: 'elections',
     path: '/morearticles/news/elections',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'marburg-virus',
@@ -280,7 +250,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'news',
     categorySlug: 'marburg-virus',
     path: '/morearticles/news/marburg-virus',
-    portalCategoryId: 'rwanda'
   },
 
   // ---------------------------------------------------------------------------
@@ -291,7 +260,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     name: 'Opinions',
     group: 'opinions',
     path: '/morearticles/opinions',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'feedback-from-readers',
@@ -299,7 +267,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'opinions',
     categorySlug: 'feedback-from-readers',
     path: '/morearticles/opinions/feedback-from-readers',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'editorial',
@@ -307,7 +274,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'opinions',
     categorySlug: 'editorial',
     path: '/morearticles/opinions/editorial',
-    portalCategoryId: 'rwanda'
   },
 
   // ---------------------------------------------------------------------------
@@ -318,7 +284,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     name: 'Sports',
     group: 'sports',
     path: '/morearticles/sports',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'volleyball',
@@ -326,7 +291,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'sports',
     categorySlug: 'volleyball',
     path: '/morearticles/sports/volleyball',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'cycling',
@@ -334,7 +298,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'sports',
     categorySlug: 'cycling',
     path: '/morearticles/sports/cycling',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'football',
@@ -342,7 +305,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'sports',
     categorySlug: 'football',
     path: '/morearticles/sports/football',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'basketball',
@@ -350,7 +312,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'sports',
     categorySlug: 'basketball',
     path: '/morearticles/sports/basketball',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'other-sports',
@@ -358,7 +319,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'sports',
     categorySlug: 'other-sports',
     path: '/morearticles/sports/other-sports',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'karate',
@@ -366,7 +326,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'sports',
     categorySlug: 'karate',
     path: '/morearticles/sports/karate',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'handball',
@@ -374,7 +333,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'sports',
     categorySlug: 'handball',
     path: '/morearticles/sports/handball',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'cricket',
@@ -382,7 +340,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'sports',
     categorySlug: 'cricket',
     path: '/morearticles/sports/cricket',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'swimming',
@@ -390,7 +347,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'sports',
     categorySlug: 'swimming',
     path: '/morearticles/sports/swimming',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'tennis',
@@ -398,7 +354,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'sports',
     categorySlug: 'tennis',
     path: '/morearticles/sports/tennis',
-    portalCategoryId: 'rwanda'
   },
   {
     id: 'afcon-2023',
@@ -406,7 +361,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     group: 'sports',
     categorySlug: 'afcon-2023',
     path: '/morearticles/sports/afcon-2023',
-    portalCategoryId: 'africa'
   },
 
   // ---------------------------------------------------------------------------
@@ -417,7 +371,6 @@ const DISCOVERY_ROOTS: NewTimesDiscoveryRoot[] = [
     name: 'Diaspora',
     group: 'diaspora',
     path: '/morearticles/diaspora',
-    portalCategoryId: 'rwanda'
   }
 ];
 
@@ -907,10 +860,6 @@ export class NewTimesAdapter extends BaseSourceAdapter {
                 section:
                   taxonomy.group
                   || root.group,
-                subcategory:
-                  taxonomy.category
-                  || root.categorySlug
-                  || root.id,
                 publishedAtHint,
                 titleHint
               };
@@ -1346,86 +1295,9 @@ export class NewTimesAdapter extends BaseSourceAdapter {
     return fallback;
   }
 
-  private detectTaxonomy(
-    url: string,
-    hint?: DiscoveredArticleHint
-  ): {
-    sourceSection: string;
-    sourceSubcategory?: string;
-    portalCategoryId: string;
-  } {
-    const taxonomy =
-      parseArticleTaxonomy(url);
-
-    const sourceSection =
-      taxonomy.group
-      || hint?.section
-      || 'news';
-
-    const sourceSubcategory =
-      taxonomy.category
-      || hint?.subcategory;
-
-    let portalCategoryId =
-      'rwanda';
-
-    if (
-      sourceSection === 'news'
-    ) {
-      const category =
-        (
-          sourceSubcategory
-          || ''
-        ).toLowerCase();
-
-      if (
-        [
-          'business',
-          'economy',
-          'finance',
-          'housing',
-          'aviation',
-          'tourism',
-          'energy',
-          'infrastructure'
-        ].includes(category)
-      ) {
-        portalCategoryId =
-          'economy';
-      } else if (
-        [
-          'technology',
-          'science'
-        ].includes(category)
-      ) {
-        portalCategoryId =
-          'tech';
-      } else if (
-        category === 'africa'
-      ) {
-        portalCategoryId =
-          'africa';
-      } else if (
-        category ===
-        'international'
-      ) {
-        portalCategoryId =
-          'world';
-      }
-    } else if (
-      sourceSection === 'sports'
-      && sourceSubcategory ===
-        'afcon-2023'
-    ) {
-      portalCategoryId =
-        'africa';
-    }
-
-    return {
-      sourceSection,
-      sourceSubcategory,
-      portalCategoryId
-    };
+  private detectSourceSection(url: string, hint?: DiscoveredArticleHint): string {
+    const taxonomy = parseArticleTaxonomy(url);
+    return taxonomy.group || hint?.section || 'news';
   }
 
   async parseArticle(
@@ -1586,12 +1458,7 @@ export class NewTimesAdapter extends BaseSourceAdapter {
           this.extractJsonLdAuthor($);
       }
 
-      const taxonomy =
-        this.detectTaxonomy(
-          canonicalUrl
-          || normalizedUrl,
-          hint
-        );
+      const sourceSection = this.detectSourceSection(canonicalUrl || normalizedUrl, hint);
 
       const {
         contentBlocks,
@@ -1677,12 +1544,7 @@ export class NewTimesAdapter extends BaseSourceAdapter {
         originalBody: bodyText,
         author,
         publishedAt,
-        sourceSection:
-          taxonomy.sourceSection,
-        sourceSubcategory:
-          taxonomy.sourceSubcategory,
-        portalCategoryId:
-          taxonomy.portalCategoryId,
+        sourceSection,
         leadImageUrl:
           finalLeadImage,
         imageUrls:
